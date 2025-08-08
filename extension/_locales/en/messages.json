@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "Idealista Trust Shield",
+    "description": "The name of the extension"
+  },
+  "appDescription": {
+    "message": "Your intelligent co-pilot for navigating Barcelona's rental market with confidence. Provides real-time trust and quality scoring for Idealista listings.",
+    "description": "The description of the extension"
+  }
+}
