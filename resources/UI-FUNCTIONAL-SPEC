@@ -1,0 +1,176 @@
+### Deliverable: UI Functional & Technical Implementation Specification
+
+Product Name: Idealista Trust Shield (v1.0 MVP)
+
+Document Version: 3.0 (Build Spec)
+
+Date: August 3, 2025
+
+Author: AI Product Lead
+
+#### 1\. Overview & Purpose
+
+This document serves as the primary engineering blueprint for building the functional "Idealista Trust Shield" Chrome extension. It translates the final v10 visual design into a detailed set of technical requirements, interactions, and data mappings. This spec is the definitive guide for Cursor to use when writing the final application code, ensuring that the implementation perfectly matches our strategic goals and design intent.
+
+#### 2\. Global Components & States
+
+The extension has two primary UI components that appear on Idealista pages.
+
+##### 2.1 The Score Pill (Search Results Page)
+
+-   Purpose: To provide users with an immediate, at-a-glance assessment of a listing's trustworthiness and quality directly on the search results page, enabling rapid triage.
+
+-   Injection Target: A new div container will be prepended inside the div.item-info-container of each article.item on the search page.
+
+-   States & Logic:
+
+-   Loading State:
+
+-   Appearance: A neutral gray pill with a skeleton loader (subtle pulsing animation) in place of the score. The height must be fixed to prevent layout shift when the score loads.
+
+-   Trigger: Displayed immediately upon injection for any listing not found in the local cache.
+
+-   Loaded State:
+
+-   Appearance: A colored pill containing the hand-drawn shield icon and the numerical score (e.g., "85/100").
+
+-   Color Logic: The color of the pill, shield, and score text is determined by the final score:
+
+-   Green (#7c9885): Score >= 75
+
+-   Yellow (#d4a574): Score between 50 and 74
+
+-   Red (#c17b6b): Score < 50
+
+-   Trigger: Replaces the Loading State once the service-worker returns a valid score. The transition should be a smooth color fade and number fade-in.
+
+##### 2.2 The Main Component (Individual Listing Page)
+
+-   Purpose: To provide a more detailed but still non-intrusive summary on the listing page, which acts as the trigger for the full analysis.
+
+-   Injection Target: A new div container will be inserted directly after the div.main-info__title element.
+
+-   States & Logic:
+
+-   Collapsed View (Default):
+
+-   Appearance: A prominent but compact view showing only the large, color-coded shield icon and the numerical score. It should use the same color logic as the Score Pill.
+
+-   Interaction: The entire component is a single, clickable target. On click, it will trigger the display of the Expanded Modal.
+
+-   Loading & Caching:
+
+-   If a score is cached from the search page, the Collapsed View will display the score instantly.
+
+-   The service-worker will still recalculate the score in the background. If the score changes, the UI will update with the "finished loading" animation.
+
+-   If no score is cached, it will display a skeleton loader until the score is returned.
+
+#### 3\. Expanded Modal: Detailed Feature Implementation
+
+The Expanded Modal is the core of the user experience, providing the "why" behind the score. It will be rendered inside a Shadow DOM to ensure complete CSS isolation from the Idealista host page.
+
+##### 3.1 AI-Generated Summary
+
+-   UI Element: A 1-2 sentence summary at the top of the modal, rendered in a stylized, friendly serif font to create a human, conversational tone.
+
+-   Logic: The text content is determined by the final score range:
+
+-   Green (>= 75): "This listing looks very promising and appears to be from a serious seller. It includes plenty of detail and we haven't detected any of the usual red flags."
+
+-   Yellow (50-74): "This listing has some minor issues to consider. Review the breakdown below to ensure it meets your standards before proceeding."
+
+-   Red (< 50): "Proceed with caution. This listing has several characteristics that are commonly associated with fraudulent posts or low-quality offers."
+
+##### 3.2 Analysis Breakdown (Accordion Rows)
+
+Each row in the breakdown is an individually expandable accordion. The entire row must be a clickable target. The state of all accordions must reset to collapsed whenever the modal is closed.
+
+Of course. Here is the "Analysis Breakdown (Accordion Rows)" table from our UI Functional & Technical Implementation Specification, formatted in markdown for your records.
+
+| Feature | Data Source (Selector) | Logic & Scoring (from `service-worker.js`) | Dynamic UI States (Collapsed View) | Expanded View Content |
+|---|---|---|---|---|
+| **Scam Keyword Scan** | `div.comment p` | `scoreScamKeywords()`: Searches description for keywords from the `SCAM_KEYWORDS` array. **(-40 points)** | **Pass:** "Clean language"\<br\>**Fail:** "High-risk language detected" | **Pass:** "Our scan found no language commonly associated with rental scams."\<br\>**Fail:** "Warning: This listing contains the phrases: '[keyword1]', '[keyword2]'. These are often used in fraudulent listings." |
+| **Price Analysis** | `.info-data-price`, `.info-features span:first-child`, `.main-info__title-minor` | `scorePriceAnomaly()`: Calculates €/m² and compares it to the neighborhood average from `NEIGHBORHOOD_AVG_PRICES`. **(-30 points)** | **Pass:** "Priced within market range"\<br\>**Fail:** "Price is unusually low"\<br\>**Warn:** "Could not verify price" | **Pass:** "The price of [€XX/m²] is consistent with the average for the [Neighborhood] area."\<br\>**Fail:** "Warning: The price of [€XX/m²] is significantly below the average for this area, which can be a red flag for a scam." |
+| **Listing Quality** | `.multimedia-shortcuts-button[data-button-type="pics"]`, `.multimedia-shortcuts-button[data-button-type="plan"]` | `scoreListingQuality()`: Checks for a floor plan and the number of photos. **(+10 to -15 points)** | **Pass:** "High-quality listing"\<br\>**Warn:** "Missing key details" | **Pass:** "This listing is well-documented with [X] photos and includes a floor plan."\<br\>**Warn:** "This listing is missing a floor plan and has only [X] photos, which may indicate a low-effort or suspicious post." |
+| **Listing Freshness** | `.date-update-text` | `scoreListingFreshness()`: Parses the "last updated" text to determine the age of the listing. **(+5 to -10 points)** | **Pass:** "Posted recently"\<br\>**Warn:** "Listing may be outdated" | **Pass:** "This property was recently updated, suggesting it is likely still available."\<br\>**Warn:** "This listing has not been updated in over 3 weeks, so it may no longer be available. Proceed with caution." |
+| **Advertiser Check** | `.professional-name` (and email from JSON) | `scoreAdvertiser()`: Checks if an advertiser marked as an "agency" is using a generic email address. **(-5 points)** | **Pass:** "Standard advertiser details"\<br\>**Warn:** "Unprofessional contact info" | **Pass:** "The advertiser's details appear to be standard for a professional agency or private lister."\<br\>**Warn:** "This advertiser is listed as an agency but is using a generic email address (e.g., @gmail.com), which is unusual." |
+
+* * * * *
+
+#### 4\. Scoring Algorithm Technical Specification
+
+##### 4.1 Phase 1 Implementation (v1.0 - Current)
+
+**Technical Data Model**:
+```javascript
+const ListingData = {
+  price: 1500,           // Selector: .item-price or .info-data-price
+  size: 60,              // Selector: .item-detail containing 'm²'
+  neighborhood: 'Gràcia', // Extracted from title text parsing
+  photoCount: 18,        // Selector: counter format "1/18" → 18
+  hasFloorPlan: true,    // Selector: [data-button-type="plan"]
+  fullDescription: '...', // Selector: div.comment p or .item-description
+  lastUpdated: '2025-01-01T00:00:00Z' // Selector: .date-update-text
+};
+```
+
+**Algorithm Weights & Calculations**:
+1. **Price Anomaly** (40 points): `checkPriceAnomaly(price, size, neighborhood)`
+   - Calculates €/m² vs NEIGHBORHOOD_AVG_PRICES constant
+   - Thresholds: <40% (-25pts), 40-60% (-10pts), >150% (-10pts)
+
+2. **Listing Quality** (35 points): `checkListingQuality(photoCount, hasFloorPlan, description)`
+   - Photo tiers: 0 (-15), 1-3 (-5), 4-7 (+5), 8-14 (+10), 15+ (+15)
+   - Floor plan bonus: +5 points
+   - Description: <50 chars (-5), 50-199 (0), 200+ (+5)
+
+3. **Content Safety** (15 points): `checkScamKeywords(fullDescription)`
+   - Binary: SCAM_KEYWORDS detected = -15 points
+
+4. **Freshness** (10 points): `checkListingFreshness(lastUpdated)`
+   - Tiers: <14 days (0), 15-30 (-3), 30+ (-7)
+
+**UI State Mapping**:
+- Score 85-100 → Green (#7c9885) → "Very promising listing"
+- Score 65-84 → Yellow (#d4a574) → "Minor issues to review"
+- Score 0-64 → Red (#c17b6b) → "Proceed with caution"
+
+##### 4.2 Phase 2 Enhancement (v2.0 - Future)
+
+**Extended Data Model**:
+```javascript
+// Additional fields for enhanced scoring
+advertiserType: 'agency',     // Selector: .about-advertiser-name presence
+advertiserName: 'Docta',      // Selector: .about-advertiser-name textContent
+contactEmail: 'info@agency.com', // Selector: a[href^="mailto:"] or form inputs
+responseRate: 0.85,           // External API integration
+duplicateDetected: false      // Cross-listing analysis algorithm
+```
+
+**Rebalanced Weights**:
+- Price Anomaly: 30 points (reduced)
+- Listing Quality: 25 points (reduced)
+- Advertiser Credibility: 20 points (new)
+- Content Safety: 15 points (unchanged)
+- Freshness & Duplicates: 10 points (enhanced)
+
+##### 4.3 Technical Implementation Notes
+
+**DOM Injection Targets**:
+- Search results: `.item-multimedia-pictures__container` (top-right positioning)
+- Listing pages: After `.main-info__title` element
+- Favorites pages: Same as search results behavior
+
+**Shadow DOM Isolation**:
+- All UI components rendered within `attachShadow({ mode: 'open' })`
+- Scoped CSS prevents host page conflicts
+- Event handling via React within shadow boundary
+
+**Caching Strategy**:
+- Key: listing URL
+- TTL: 24 hours
+- Storage: `chrome.storage.local`
+- Invalidation: Manual refresh or score update
+
+* * * * *

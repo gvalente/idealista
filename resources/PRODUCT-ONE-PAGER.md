@@ -78,3 +78,42 @@ The **Idealista Trust Shield** is a free Chrome browser extension that acts as a
 2.  **User Problem Resolution:** The MVP's features directly address the core user stories related to trust, safety, and listing quality.
 
 3.  **AI Efficacy Score:** The AI tools used achieve their desired results with minimal manual correction.
+
+* * * * *
+
+6\. Product Scoring Evolution
+-----------------------------
+
+### Phase 1: Foundation Release (v1.0) - Ship Ready
+**Reliable trust scoring using proven data extraction methods**
+
+**Core Trust Factors**:
+- **Price Intelligence** (40% weight): Automatically detects suspiciously low prices by comparing against Barcelona neighborhood market rates, protecting users from "too good to be true" scam indicators
+- **Listing Quality Assessment** (35% weight): Evaluates photo completeness, floor plan availability, and description thoroughness to surface serious vs low-effort listings  
+- **Safety Content Screening** (15% weight): Scans descriptions for established scam language patterns and red-flag phrases commonly used in fraudulent listings
+- **Listing Freshness Analysis** (10% weight): Considers recency of updates to help users prioritize actively managed vs stale "ghost" listings
+
+**User Trust Signals**:
+- **High Trust (85-100)**: Green shield - "This listing looks very promising with no major red flags detected"
+- **Medium Trust (65-84)**: Yellow shield - "This listing has minor issues to review before proceeding"  
+- **Low Trust (0-64)**: Red shield - "Proceed with caution - multiple concerning factors detected"
+
+### Phase 2: Enhanced Credibility (v2.0) - Future Evolution
+**Advanced professional verification and duplicate detection**
+
+**Additional Trust Factors**:
+- **Advertiser Credibility Scoring** (new 20% weight): Distinguishes professional agencies from private advertisers, evaluates email domain professionalism, and analyzes agency naming patterns
+- **Cross-Platform Duplicate Detection**: Identifies potential duplicate listings to reduce user cognitive load and spot suspicious patterns
+- **Historical Response Rate Integration**: Incorporates crowd-sourced responsiveness data to predict advertiser reliability
+
+### Phase 3: Market Intelligence (v3.0) - Extended Platform
+**Comprehensive trust ecosystem with predictive capabilities**
+
+**Advanced Features**:
+- Real-time Barcelona market trend analysis for price context
+- Community verification system with user feedback integration  
+- Advanced photo similarity detection to identify stolen listing images
+- Predictive availability scoring based on listing behavior patterns
+- Professional advertiser verification badges
+
+This evolution ensures immediate user value while building toward Barcelona's most trusted rental platform intelligence system.

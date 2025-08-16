@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Idealista Trust Shield",
-  "version": "1.0.0",
+  "version": "1.3.6",
   "description": "Your intelligent co-pilot for navigating Barcelona's rental market with confidence. Provides real-time trust and quality scoring for Idealista listings.",
   "default_locale": "en",
   "permissions": [
@@ -23,7 +23,13 @@
         "*://*.idealista.com/en/venta-viviendas/*",
         "*://*.idealista.com/venta-viviendas/*",
         "*://*.idealista.com/en/alquiler-viviendas/*",
-        "*://*.idealista.com/alquiler-viviendas/*"
+        "*://*.idealista.com/alquiler-viviendas/*",
+        "*://*.idealista.com/en/point/alquiler-viviendas/*",
+        "*://*.idealista.com/point/alquiler-viviendas/*",
+        "*://*.idealista.com/en/point/venta-viviendas/*",
+        "*://*.idealista.com/point/venta-viviendas/*",
+        "*://*.idealista.com/en/usuario/favoritos/*",
+        "*://*.idealista.com/usuario/favoritos/*"
       ],
       "js": ["dist/content.js"],
       "run_at": "document_end"
