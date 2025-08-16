@@ -161,16 +161,26 @@ function TrustShieldCollapsedProduction(props) {
 
   React.useEffect(() => {
     if (!isLoading && scoreData?.success) {
-      const newScore = scoreData.data.score;
+      const newScoreData = scoreData.data;
+      const newScore = newScoreData.score;
+      
+      console.log('[TrustShield v1.2.3] 🎯 UI UPDATE - Received new score data:', {
+        newScore,
+        currentDisplayScore: displayScore?.score,
+        willUpdate: !displayScore || displayScore.score !== newScore,
+        scoreData: newScoreData
+      });
+      
       if (displayScore && displayScore.score !== newScore) {
         // Show update animation when cached differs from fresh
         setIsUpdating(true);
         setTimeout(() => {
-          setDisplayScore(scoreData.data);
+          setDisplayScore(newScoreData);
           setIsUpdating(false);
         }, 150);
       } else {
-        setDisplayScore(scoreData.data);
+        // Always update if no display score or first time
+        setDisplayScore(newScoreData);
       }
     }
   }, [isLoading, scoreData, displayScore]);

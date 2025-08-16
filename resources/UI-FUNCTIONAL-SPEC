@@ -97,3 +97,80 @@ Of course. Here is the "Analysis Breakdown (Accordion Rows)" table from our UI F
 | **Advertiser Check** | `.professional-name` (and email from JSON) | `scoreAdvertiser()`: Checks if an advertiser marked as an "agency" is using a generic email address. **(-5 points)** | **Pass:** "Standard advertiser details"\<br\>**Warn:** "Unprofessional contact info" | **Pass:** "The advertiser's details appear to be standard for a professional agency or private lister."\<br\>**Warn:** "This advertiser is listed as an agency but is using a generic email address (e.g., @gmail.com), which is unusual." |
 
 * * * * *
+
+#### 4\. Scoring Algorithm Technical Specification
+
+##### 4.1 Phase 1 Implementation (v1.0 - Current)
+
+**Technical Data Model**:
+```javascript
+const ListingData = {
+  price: 1500,           // Selector: .item-price or .info-data-price
+  size: 60,              // Selector: .item-detail containing 'm²'
+  neighborhood: 'Gràcia', // Extracted from title text parsing
+  photoCount: 18,        // Selector: counter format "1/18" → 18
+  hasFloorPlan: true,    // Selector: [data-button-type="plan"]
+  fullDescription: '...', // Selector: div.comment p or .item-description
+  lastUpdated: '2025-01-01T00:00:00Z' // Selector: .date-update-text
+};
+```
+
+**Algorithm Weights & Calculations**:
+1. **Price Anomaly** (40 points): `checkPriceAnomaly(price, size, neighborhood)`
+   - Calculates €/m² vs NEIGHBORHOOD_AVG_PRICES constant
+   - Thresholds: <40% (-25pts), 40-60% (-10pts), >150% (-10pts)
+
+2. **Listing Quality** (35 points): `checkListingQuality(photoCount, hasFloorPlan, description)`
+   - Photo tiers: 0 (-15), 1-3 (-5), 4-7 (+5), 8-14 (+10), 15+ (+15)
+   - Floor plan bonus: +5 points
+   - Description: <50 chars (-5), 50-199 (0), 200+ (+5)
+
+3. **Content Safety** (15 points): `checkScamKeywords(fullDescription)`
+   - Binary: SCAM_KEYWORDS detected = -15 points
+
+4. **Freshness** (10 points): `checkListingFreshness(lastUpdated)`
+   - Tiers: <14 days (0), 15-30 (-3), 30+ (-7)
+
+**UI State Mapping**:
+- Score 85-100 → Green (#7c9885) → "Very promising listing"
+- Score 65-84 → Yellow (#d4a574) → "Minor issues to review"
+- Score 0-64 → Red (#c17b6b) → "Proceed with caution"
+
+##### 4.2 Phase 2 Enhancement (v2.0 - Future)
+
+**Extended Data Model**:
+```javascript
+// Additional fields for enhanced scoring
+advertiserType: 'agency',     // Selector: .about-advertiser-name presence
+advertiserName: 'Docta',      // Selector: .about-advertiser-name textContent
+contactEmail: 'info@agency.com', // Selector: a[href^="mailto:"] or form inputs
+responseRate: 0.85,           // External API integration
+duplicateDetected: false      // Cross-listing analysis algorithm
+```
+
+**Rebalanced Weights**:
+- Price Anomaly: 30 points (reduced)
+- Listing Quality: 25 points (reduced)
+- Advertiser Credibility: 20 points (new)
+- Content Safety: 15 points (unchanged)
+- Freshness & Duplicates: 10 points (enhanced)
+
+##### 4.3 Technical Implementation Notes
+
+**DOM Injection Targets**:
+- Search results: `.item-multimedia-pictures__container` (top-right positioning)
+- Listing pages: After `.main-info__title` element
+- Favorites pages: Same as search results behavior
+
+**Shadow DOM Isolation**:
+- All UI components rendered within `attachShadow({ mode: 'open' })`
+- Scoped CSS prevents host page conflicts
+- Event handling via React within shadow boundary
+
+**Caching Strategy**:
+- Key: listing URL
+- TTL: 24 hours
+- Storage: `chrome.storage.local`
+- Invalidation: Manual refresh or score update
+
+* * * * *

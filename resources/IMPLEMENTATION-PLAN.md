@@ -244,7 +244,88 @@ The extension must fail gracefully.
 
 * * * * *
 
-#### 9\. Future Considerations (Post-MVP)
+#### 9\. Scoring Algorithm Implementation Roadmap
+
+##### 9.1 Phase 1: Current Implementation (v1.0 - Production Ready)
+
+**Technical Scope**: Ship-ready scoring system using reliably extractable data fields from DOM scraping and JSON endpoints.
+
+**Data Model Fields**:
+```javascript
+const ListingData = {
+  price: 1500,           // From search card or .info-data-price
+  size: 60,              // From search card or .info-features spans containing 'm²'
+  neighborhood: 'Gràcia', // From search card title parsing
+  photoCount: 18,        // From "1/18" counter format
+  hasFloorPlan: true,    // From icon detection [data-button-type="plan"]
+  fullDescription: '...', // From .comment or search card description
+  lastUpdated: '2025-01-01T00:00:00Z' // From .date-update-text
+};
+```
+
+**Algorithm Implementation** (100-point scale):
+1. **Price Anomaly Analysis** (40% weight - 40 points):
+   - Calculate €/m² ratio and compare against NEIGHBORHOOD_AVG_PRICES
+   - Pass (0 penalty): Within 60-150% of area average
+   - Warning (-10 points): 40-60% or 150-200% of average
+   - Fail (-25 points): <40% of average (scam indicator)
+
+2. **Listing Quality Assessment** (35% weight - 35 points):
+   - Photo scoring: 15+ photos (+15), 8-14 (+10), 4-7 (+5), 1-3 (-5), 0 (-15)
+   - Floor plan bonus: +5 points if present
+   - Description quality: 200+ chars (+5), 50-199 (0), <50 (-5)
+
+3. **Content Safety Scan** (15% weight - 15 points):
+   - Scan description against SCAM_KEYWORDS array
+   - Pass (0 penalty): No keywords detected
+   - Fail (-15 points): Any scam keywords found
+
+4. **Listing Freshness** (10% weight - 10 points):
+   - Fresh (0 penalty): <14 days old
+   - Stale (-3 points): 15-30 days
+   - Very stale (-7 points): 30+ days
+
+**Risk Level Mapping**:
+- 85-100: Low Risk - "Very promising listing with no major red flags"
+- 65-84: Medium Risk - "Minor issues to review before proceeding"
+- 0-64: High Risk - "Proceed with caution - multiple concerning factors"
+
+##### 9.2 Phase 2: Enhanced Credibility (v2.0 - Future Enhancement)
+
+**Additional Technical Fields**:
+```javascript
+// Extended ListingData structure
+advertiserType: 'agency',     // From .professional-name presence
+advertiserName: 'Docta',      // From .about-advertiser-name
+contactEmail: 'info@agency.com', // From mailto: links or data attributes
+responseRate: 0.85,           // Historical data integration
+duplicateDetected: false      // Cross-listing analysis
+```
+
+**Rebalanced Algorithm Weights**:
+- Price Anomaly: 30% (reduced from 40%)
+- Listing Quality: 25% (reduced from 35%)
+- Advertiser Credibility: 20% (new major factor)
+- Content Safety: 15% (unchanged)
+- Freshness & Duplicates: 10% (enhanced with duplicate detection)
+
+**New Advertiser Scoring Logic**:
+- Professional agency (+5), Private (0)
+- Business email domain (+5), Generic domain (-3)
+- Professional naming patterns (+3), Suspicious (-2)
+- High response rate (+7), Low response rate (-5)
+
+##### 9.3 Phase 3: Advanced Analytics (v3.0 - Extended Features)
+
+**Advanced Technical Capabilities**:
+- Cross-listing duplicate detection via image similarity
+- Real-time market trend analysis integration
+- Advertiser verification status API integration
+- User feedback aggregation system
+
+* * * * *
+
+#### 10\. Future Considerations (Post-MVP)
 
 -   B2B "Listing Optimizer": As noted in our project plan, a future version could be tailored for real estate agencies to help them improve their listing quality.
 

@@ -23,6 +23,8 @@ import './index.js';
       return 'listing';
     } else if (url.includes('/alquiler-viviendas/') || url.includes('/venta-viviendas/')) {
       return 'search';
+    } else if (url.includes('/usuario/favoritos/') || url.includes('/user/favorites/')) {
+      return 'favorites';
     }
     
     return 'unknown';
@@ -203,6 +205,13 @@ import './index.js';
           return;
         }
         
+        console.log('[TrustShield v1.2.3] 📨 RECEIVED RESPONSE FROM SERVICE WORKER:', {
+          success: response?.success,
+          score: response?.data?.score,
+          breakdown: response?.data?.breakdown?.length,
+          listingId: listingData.id
+        });
+        
         callback(response);
       });
     } catch (error) {
@@ -278,7 +287,7 @@ import './index.js';
         try {
           const scorePayload = payload && payload.data ? payload.data : payload;
           if (payload && payload.debug) {
-            console.log('[TrustShield v1.0.9] DEBUG click payload:', {
+            console.log('[TrustShield v1.2.3] DEBUG click payload:', {
               id: listingData.id,
               url: listingData.url,
               score: scorePayload?.score,
@@ -565,7 +574,7 @@ import './index.js';
       return chevron;
     }
 
-    // Map analysis items from breakdown data
+    // Phase 1 Analysis Items - only include implemented scoring factors
     const analysisItems = [
       {
         title: 'Scam Keywords',
@@ -590,18 +599,6 @@ import './index.js';
         status: 'pass',
         summary: 'Recently updated',
         breakdown: scoreData.breakdown?.find(b => b.type === 'freshness')
-      },
-      {
-        title: 'Duplicates',
-        status: 'pass',
-        summary: 'Unique listing',
-        breakdown: scoreData.breakdown?.find(b => b.type === 'duplicate')
-      },
-      {
-        title: 'Advertiser',
-        status: 'caution',
-        summary: 'Generic contact',
-        breakdown: scoreData.breakdown?.find(b => b.type === 'generic_email')
       }
     ];
 
@@ -829,9 +826,15 @@ import './index.js';
 
     // Close helpers
     function teardown() {
-      document.documentElement.style.overflow = previousOverflow || '';
-      if (host && host.parentNode) host.parentNode.removeChild(host);
-      window.removeEventListener('keydown', onKey);
+      try {
+        document.documentElement.style.overflow = previousOverflow || '';
+        if (host && host.parentNode) {
+          host.parentNode.removeChild(host);
+        }
+        window.removeEventListener('keydown', onKey);
+      } catch (error) {
+        console.error('[TrustShield v1.2.3] Error in teardown:', error);
+      }
     }
     function onKey(ev) { if (ev.key === 'Escape') teardown(); }
     closeBtn.addEventListener('click', teardown);
@@ -851,11 +854,8 @@ import './index.js';
     processedListings.add(listingKey);
     
     try {
-      // Debug: Log container info
-      console.log(`Processing listing ${listingData.id} with variant ${componentVariant}`, {
-        imageContainer: !!listingData.imageContainer,
-        imageContainerClass: listingData.imageContainer?.className
-      });
+      // Debug: Log container info (removed for cleaner logs)
+      // console.log(`Processing listing ${listingData.id} with variant ${componentVariant}`);
       
       // Create and inject container with variant-specific handling
       const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
@@ -968,7 +968,7 @@ import './index.js';
   // Initialize the extension
   function initialize() {
     try {
-      console.log('Idealista Trust Shield content v1.0.9: initialize start');
+      console.log('Idealista Trust Shield content v1.2.3: initialize start');
       // Detect page type
       pageType = detectPageType();
       
@@ -977,10 +977,10 @@ import './index.js';
         return;
       }
       
-              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.0.9)');
+              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.2.3)');
       
       // Process existing content
-      if (pageType === 'search') {
+      if (pageType === 'search' || pageType === 'favorites') {
         processSearchPageListings();
         observePageChanges();
       } else if (pageType === 'listing') {
@@ -994,9 +994,9 @@ import './index.js';
         console.warn('Idealista Trust Shield: Failed to inject debug badge:', e);
       }
       
-      console.log('Idealista Trust Shield: Initialization complete (v1.0.9)');
+      console.log('Idealista Trust Shield: Initialization complete (v1.2.3)');
     } catch (error) {
-      console.error('Idealista Trust Shield: Initialization failed (v1.0.9):', error);
+      console.error('Idealista Trust Shield: Initialization failed (v1.2.3):', error);
     }
   }
 

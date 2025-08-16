@@ -36,7 +36,9 @@ const SCAM_KEYWORDS = [
 ];
 
 // Event Listener for Messages from Content Script
-console.log('Idealista Trust Shield service worker v1.0.9 loaded - DATA EXTRACTION FIXED');
+console.log('🔄 Idealista Trust Shield service worker v1.2.3 loaded - CACHING DISABLED, DEBUGGING ENABLED');
+console.log('[TrustShield v1.2.3] Service worker loaded at:', new Date().toISOString());
+console.log('[TrustShield v1.2.3] ⚠️  If you see old scores, the service worker is cached! Reload extension!');
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.action === 'getListingScore') {
     handleListingScoreRequest(request.listingId, request.listingUrl, sendResponse, request.initialData || {});
@@ -47,19 +49,20 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 // Main Handler for Listing Score Requests
 async function handleListingScoreRequest(listingId, listingUrl, sendResponse, initialData) {
   try {
-    // Check cache first
-    const cachedScore = await getCachedScore(listingUrl);
-    if (cachedScore) {
-      sendResponse({ success: true, data: cachedScore });
-      return;
-    }
+    // Check cache first (disabled for v1.2.3 debugging)
+    // const cachedScore = await getCachedScore(listingUrl);
+    // if (cachedScore) {
+    //   sendResponse({ success: true, data: cachedScore });
+    //   return;
+    // }
+    console.log('[TrustShield v1.2.3] CACHE DISABLED - forcing fresh calculation');
 
     // Fetch fresh data
     let listingData = await fetchListingData(listingId, listingUrl);
     
     // If no data was fetched, create mock data from initial data
     if (!listingData) {
-      console.log(`[TrustShield v1.0.9] Creating mock data for ${listingId} from initial data:`, initialData);
+      console.log(`[TrustShield v1.2.3] Creating Phase 1 data for ${listingId} from initial data:`, initialData);
       listingData = {
         id: listingId,
         url: listingUrl,
@@ -69,10 +72,7 @@ async function handleListingScoreRequest(listingId, listingUrl, sendResponse, in
         neighborhood: initialData?.neighborhood || '',
         photoCount: initialData?.photoCount ?? 0,
         hasFloorPlan: initialData?.hasFloorPlan ?? false,
-        lastUpdated: new Date().toISOString(),
-        advertiserType: 'private',
-        advertiserName: '',
-        contactEmail: null
+        lastUpdated: new Date().toISOString()
       };
     }
     
@@ -82,11 +82,24 @@ async function handleListingScoreRequest(listingId, listingUrl, sendResponse, in
       listingData = { ...listingData, ...cleaned };
     }
     
-    // Apply mock data generation for empty fields (but do NOT overwrite photoCount/hasFloorPlan if provided)
-    listingData = applyMockDataGeneration(listingData);
+    // Clean to Phase 1 fields only and apply mock data generation for empty fields
+    const phase1Data = {
+      id: listingData.id,
+      url: listingData.url,
+      price: listingData.price,
+      size: listingData.size,
+      neighborhood: listingData.neighborhood,
+      photoCount: listingData.photoCount,
+      hasFloorPlan: listingData.hasFloorPlan,
+      fullDescription: listingData.fullDescription || '',
+      lastUpdated: listingData.lastUpdated
+    };
+    
+    const cleanedData = applyMockDataGenerationPhase1(phase1Data);
+    console.log(`[TrustShield v1.2.3] Phase 1 cleaned data for scoring:`, cleanedData);
 
     // Calculate score
-    const score = calculateScore(listingData);
+    const score = calculateScore(cleanedData);
     // Attach debug fields
     score._debug = {
       id: listingId,
@@ -99,25 +112,31 @@ async function handleListingScoreRequest(listingId, listingUrl, sendResponse, in
       version: '1.0.9'
     };
     
-    // Cache the result
-    await setCachedScore(listingUrl, score);
+    // Caching disabled for debugging
+    // await setCachedScore(listingUrl, score);
     
+    console.log('[TrustShield v1.2.3] 🚀 SENDING RESPONSE TO CONTENT SCRIPT:', { 
+      score: score.score, 
+      breakdown: score.breakdown.length,
+      riskLevel: score.riskLevel 
+    });
     sendResponse({ success: true, data: score });
   } catch (error) {
-    console.error('Error processing listing score:', error);
+    console.error('[TrustShield v1.2.3] ERROR in service worker:', error);
+    console.error('[TrustShield v1.2.3] Stack trace:', error.stack);
     sendResponse({ success: false, error: error.message });
   }
 }
 
 // Data Fetching with Primary and Contingency Strategies
 async function fetchListingData(listingId, listingUrl) {
-      console.log(`[TrustShield v1.0.9] Fetching data for ${listingId}`);
+      console.log(`[TrustShield v1.2.3] Fetching data for ${listingId}`);
   
   try {
     // Primary Strategy: Try JSON endpoint first
     const jsonData = await fetchJsonData(listingId);
     if (jsonData) {
-      console.log(`[TrustShield v1.0.9] JSON data found for ${listingId}`);
+      console.log(`[TrustShield v1.2.3] JSON data found for ${listingId}`);
       return parseJsonData(jsonData, listingUrl);
     }
   } catch (error) {
@@ -128,7 +147,7 @@ async function fetchListingData(listingId, listingUrl) {
     // Contingency Plan: Fetch and parse HTML
     const htmlData = await fetchHtmlData(listingUrl);
     if (htmlData) {
-      console.log(`[TrustShield v1.0.9] HTML data fetched for ${listingId}, length: ${htmlData.length}`);
+      console.log(`[TrustShield v1.2.3] HTML data fetched for ${listingId}, length: ${htmlData.length}`);
       let parsed = parseHtmlData(htmlData, listingUrl);
       
       // If key fields are missing, try to extract from embedded JSON (dataLayer or window.__INITIAL_STATE__)
@@ -136,7 +155,7 @@ async function fetchListingData(listingId, listingUrl) {
         try {
           const embedded = extractEmbeddedJson(htmlData);
           if (embedded) {
-            console.log(`[TrustShield v1.0.9] Embedded JSON found for ${listingId}:`, embedded);
+            console.log(`[TrustShield v1.2.3] Embedded JSON found for ${listingId}:`, embedded);
             parsed = {
               ...parsed,
               fullDescription: parsed.fullDescription || embedded.description || '',
@@ -149,16 +168,16 @@ async function fetchListingData(listingId, listingUrl) {
         }
       }
       
-      console.log(`[TrustShield v1.0.9] Final parsed data for ${listingId}:`, parsed);
+      console.log(`[TrustShield v1.2.3] Final parsed data for ${listingId}:`, parsed);
       return parsed;
     } else {
-      console.warn(`[TrustShield v1.0.9] No HTML data returned for ${listingId}`);
+      console.warn(`[TrustShield v1.2.3] No HTML data returned for ${listingId}`);
     }
   } catch (error) {
     console.error('HTML fallback also failed:', error);
   }
 
-  console.warn(`[TrustShield v1.0.9] All data fetching failed for ${listingId}, returning null`);
+  console.warn(`[TrustShield v1.2.3] All data fetching failed for ${listingId}, returning null`);
   return null;
 }
 
@@ -288,11 +307,11 @@ async function fetchJsonData(listingId) {
   ];
 
   for (const url of variants) {
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
         credentials: 'include',
-        headers: {
+      headers: {
           'Accept': 'application/json, text/plain, */*',
           'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
@@ -325,8 +344,8 @@ async function fetchJsonData(listingId) {
             return JSON.parse(candidate);
           } catch (_) {}
         }
-      }
-    } catch (error) {
+    }
+  } catch (error) {
       console.warn('JSON fetch variant failed:', url, error);
     }
   }
@@ -337,7 +356,7 @@ async function fetchJsonData(listingId) {
 // Contingency Plan: Fetch HTML Data
 async function fetchHtmlData(listingUrl) {
   try {
-    console.log(`[TrustShield v1.0.9] Fetching HTML from: ${listingUrl}`);
+    console.log(`[TrustShield v1.2.3] Fetching HTML from: ${listingUrl}`);
     
     const response = await fetch(listingUrl, {
       method: 'GET',
@@ -353,22 +372,22 @@ async function fetchHtmlData(listingUrl) {
       }
     });
 
-    console.log(`[TrustShield v1.0.9] Response status: ${response.status}, ok: ${response.ok}`);
+    console.log(`[TrustShield v1.2.3] Response status: ${response.status}, ok: ${response.ok}`);
 
     if (response.ok) {
       const text = await response.text();
-      console.log(`[TrustShield v1.0.9] HTML length: ${text.length}, first 200 chars: ${text.substring(0, 200)}`);
+      console.log(`[TrustShield v1.2.3] HTML length: ${text.length}, first 200 chars: ${text.substring(0, 200)}`);
       
       if (typeof text === 'string' && text.length > 1000) {
         return text;
       } else {
-        console.warn(`[TrustShield v1.0.9] HTML too short: ${text.length} characters`);
+        console.warn(`[TrustShield v1.2.3] HTML too short: ${text.length} characters`);
       }
     } else {
-      console.warn(`[TrustShield v1.0.9] HTTP error: ${response.status} ${response.statusText}`);
+      console.warn(`[TrustShield v1.2.3] HTTP error: ${response.status} ${response.statusText}`);
     }
   } catch (error) {
-    console.error('[TrustShield v1.0.9] HTML fetch failed:', error);
+    console.error('[TrustShield v1.2.3] HTML fetch failed:', error);
   }
 
   return null;
@@ -385,7 +404,7 @@ function parseJsonData(jsonData, listingUrl) {
       advertiserType = advertiserName ? 'agency' : 'private';
     }
     const contactEmail = data.contactEmail || data.email || data.advertiser?.email || data.seller?.email || null;
-
+    
     return {
       id: data.id || extractIdFromUrl(listingUrl),
       url: listingUrl,
@@ -411,7 +430,7 @@ function parseHtmlData(htmlText, listingUrl) {
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlText, 'text/html');
-
+    
     // Price: Multiple selectors for different page layouts
     let price = 0;
     const priceSelectors = [
@@ -450,7 +469,7 @@ function parseHtmlData(htmlText, listingUrl) {
       const el = doc.querySelector(selector);
       if (el) {
         fullDescription = el.textContent.trim();
-        console.log(`[TrustShield v1.0.9] Found description with selector '${selector}': ${fullDescription.substring(0, 100)}...`);
+        console.log(`[TrustShield v1.2.3] Found description with selector '${selector}': ${fullDescription.substring(0, 100)}...`);
         if (fullDescription) break;
       }
     }
@@ -494,7 +513,7 @@ function parseHtmlData(htmlText, listingUrl) {
       const el = doc.querySelector(selector);
       if (el) {
         neighborhood = el.textContent.trim();
-        console.log(`[TrustShield v1.0.9] Found neighborhood with selector '${selector}': ${neighborhood}`);
+        console.log(`[TrustShield v1.2.3] Found neighborhood with selector '${selector}': ${neighborhood}`);
         if (neighborhood) break;
       }
     }
@@ -515,7 +534,7 @@ function parseHtmlData(htmlText, listingUrl) {
       if (el) {
         const text = el.textContent || el.getAttribute('title') || '';
         photoCount = parseInt(text.replace(/[^\d]/g, ''), 10) || 0;
-        console.log(`[TrustShield v1.0.9] Found photo count with selector '${selector}': ${photoCount} (text: "${text}")`);
+        console.log(`[TrustShield v1.2.3] Found photo count with selector '${selector}': ${photoCount} (text: "${text}")`);
         if (photoCount > 0) break;
       }
     }
@@ -535,7 +554,7 @@ function parseHtmlData(htmlText, listingUrl) {
         const imgs = doc.querySelectorAll(selector);
         if (imgs.length > 0) {
           photoCount = imgs.length;
-          console.log(`[TrustShield v1.0.9] Counted ${photoCount} images with selector '${selector}'`);
+          console.log(`[TrustShield v1.2.3] Counted ${photoCount} images with selector '${selector}'`);
           break;
         }
       }
@@ -556,7 +575,7 @@ function parseHtmlData(htmlText, listingUrl) {
     for (const selector of floorPlanSelectors) {
       if (doc.querySelector(selector)) {
         hasFloorPlan = true;
-        console.log(`[TrustShield v1.0.9] Found floor plan with selector '${selector}'`);
+        console.log(`[TrustShield v1.2.3] Found floor plan with selector '${selector}'`);
         break;
       }
     }
@@ -576,7 +595,7 @@ function parseHtmlData(htmlText, listingUrl) {
         const updateText = el.textContent.trim();
         if (updateText) {
           lastUpdated = updateText;
-          console.log(`[TrustShield v1.0.9] Found last updated with selector '${selector}': ${updateText}`);
+          console.log(`[TrustShield v1.2.3] Found last updated with selector '${selector}': ${updateText}`);
           break;
         }
       }
@@ -585,6 +604,7 @@ function parseHtmlData(htmlText, listingUrl) {
     // Advertiser name/type/email fallbacks (DOM selectors)
     let advertiserName = '';
     const advertiserSelectors = [
+      '.about-advertiser-name',  // Primary from your HTML example
       '.professional-name',
       '.about-advertiser .name',
       '[data-testid="advertiser-name"]',
@@ -598,22 +618,47 @@ function parseHtmlData(htmlText, listingUrl) {
       const el = doc.querySelector(selector);
       if (el) {
         advertiserName = (el.textContent || '').trim();
+        console.log(`[TrustShield v1.2.3] Found advertiser name with selector '${selector}': ${advertiserName}`);
         if (advertiserName) break;
       }
     }
 
-    // Email from mailto links or data attributes
+    // Email from mailto links, data attributes, or contact forms
     let contactEmail = null;
+    
+    // Try mailto links first
     const mailEl = doc.querySelector('a[href^="mailto:"]');
     if (mailEl) {
       const href = mailEl.getAttribute('href');
       const match = href && href.match(/mailto:([^?\s]+)/i);
-      if (match && match[1]) contactEmail = match[1];
+      if (match && match[1]) {
+        contactEmail = match[1];
+        console.log(`[TrustShield v1.2.3] Found email via mailto: ${contactEmail}`);
+      }
     }
+    
+    // Try data attributes
     if (!contactEmail) {
-      const emailAttrEl = doc.querySelector('[data-contact-email], [data-email]');
-      if (emailAttrEl) contactEmail = emailAttrEl.getAttribute('data-contact-email') || emailAttrEl.getAttribute('data-email') || null;
+      const emailAttrEl = doc.querySelector('[data-contact-email], [data-email], [data-advertiser-email]');
+      if (emailAttrEl) {
+        contactEmail = emailAttrEl.getAttribute('data-contact-email') || 
+                      emailAttrEl.getAttribute('data-email') || 
+                      emailAttrEl.getAttribute('data-advertiser-email') || null;
+        if (contactEmail) console.log(`[TrustShield v1.2.3] Found email via data attribute: ${contactEmail}`);
+      }
     }
+    
+    // Try hidden form inputs (common pattern for contact forms)
+    if (!contactEmail) {
+      const hiddenEmailEl = doc.querySelector('input[name="email"], input[name="contactEmail"], input[name="advertiserEmail"]');
+      if (hiddenEmailEl) {
+        contactEmail = hiddenEmailEl.value || hiddenEmailEl.getAttribute('value') || null;
+        if (contactEmail) console.log(`[TrustShield v1.2.3] Found email via form input: ${contactEmail}`);
+      }
+    }
+    
+    // For agencies, sometimes email is not publicly displayed for privacy
+    // This is normal and expected behavior
 
     // JSON-LD scripts: Organization/RealEstateAgent/seller
     if (!advertiserName || !contactEmail) {
@@ -641,10 +686,10 @@ function parseHtmlData(htmlText, listingUrl) {
     if (inferredTypeFromScripts) advertiserType = inferredTypeFromScripts;
 
     // DEBUG: Log what we extracted
-    console.log(`[TrustShield v1.0.9] Extracted data for ${listingUrl}:`, {
+    console.log(`[TrustShield v1.2.3] Extracted data for ${listingUrl}:`, {
       price, size, neighborhood, photoCount, hasFloorPlan, fullDescription: fullDescription.substring(0, 50) + '...', advertiserName, contactEmail
     });
-
+    
     return {
       id: extractIdFromUrl(listingUrl),
       url: listingUrl,
@@ -666,6 +711,20 @@ function parseHtmlData(htmlText, listingUrl) {
 }
 
 // Apply mock data generation for empty fields
+// Phase 1 Mock Data Generation - only for essential fields
+function applyMockDataGenerationPhase1(listingData) {
+  const result = { ...listingData };
+  
+  // Only generate realistic mock data for key Phase 1 fields that are empty
+  if (!result.fullDescription || result.fullDescription.trim() === '') {
+    result.fullDescription = `Modern ${result.size || 60}m² apartment in ${result.neighborhood || 'Barcelona'}. Well-maintained property with good natural light and convenient location.`;
+  }
+  
+  // Don't mock price/size/photos - these should be real or 0
+  return result;
+}
+
+// Legacy function kept for compatibility
 function applyMockDataGeneration(listingData) {
   const { price, size } = listingData;
 
@@ -702,84 +761,118 @@ function extractIdFromUrl(url) {
   return match ? match[1] : '';
 }
 
-// Main Scoring Algorithm - V0 spec with proper weighting
+// Phase 1 Scoring Algorithm - Fixed Math (v1.2.3)
 function calculateScore(listingData) {
-  let totalScore = 0;
+  let totalScore = 100; // Start with baseline score
   const breakdown = [];
-  const weights = {
-    scam_keywords: 15,    // 15% weight
-    price_anomaly: 25,    // 25% weight  
-    listing_quality: 20,  // 20% weight
-    freshness: 10,        // 10% weight
-    duplicates: 15,       // 15% weight
-    advertiser: 15        // 15% weight
+  const maxScores = {
+    price_anomaly: 40,    // Max 40 points (0 to -40)
+    listing_quality: 35,  // Max 35 points (-15 to +20) 
+    content_safety: 15,   // Max 15 points (0 to -15)
+    freshness: 10         // Max 10 points (0 to -10)
   };
 
-  // Scam Keywords (15% weight)
-  const scamCheck = checkScamKeywords(listingData.fullDescription);
-  const scamScore = scamCheck.detected ? 0 : 100;
-  totalScore += (scamScore * weights.scam_keywords) / 100;
-  breakdown.push({ 
-    type: 'scam_keywords', 
-    points: scamCheck.detected ? -weights.scam_keywords : 0,
-    details: scamCheck.detected ? `Suspicious phrases detected: ${scamCheck.keywords.join(', ')}` : 'Clean language detected'
+  console.log('[TrustShield v1.2.3] Starting calculation with data:', {
+    photoCount: listingData.photoCount,
+    hasFloorPlan: listingData.hasFloorPlan,
+    descriptionLength: (listingData.fullDescription || '').length,
+    price: listingData.price,
+    size: listingData.size
   });
 
-  // Price Check (25% weight)
+  // Content Safety (15 points max)
+  const scamCheck = checkScamKeywords(listingData.fullDescription);
+  let safetyScore = 15; // Start with full points
+  if (scamCheck.detected) {
+    safetyScore = 0; // Lose all safety points
+    breakdown.push({ 
+      type: 'scam_keywords', 
+      points: -15,
+      details: `Warning: Contains phrases commonly used in scams: ${scamCheck.keywords.join(', ')}`
+    });
+  } else {
+    breakdown.push({ 
+      type: 'scam_keywords', 
+      points: 0,
+      details: 'Clean language - no suspicious phrases detected'
+    });
+  }
+  
+  const safetyContribution = (safetyScore / 15) * maxScores.content_safety;
+  totalScore = totalScore - maxScores.content_safety + safetyContribution;
+
+  // Price Anomaly (40 points max)
   const priceCheck = checkPriceAnomaly(listingData.price, listingData.size, listingData.neighborhood);
-  const priceScore = priceCheck.anomaly ? 30 : 100; // Significant penalty for price anomalies
-  totalScore += (priceScore * weights.price_anomaly) / 100;
+  let priceScore = 40; // Start with full points
+  if (priceCheck.severity === 'major') {
+    priceScore = 0; // Major red flag = lose all points
+  } else if (priceCheck.severity === 'minor') {
+    priceScore = 25; // Minor warning = lose some points
+  }
+  
+  const priceContribution = (priceScore / 40) * maxScores.price_anomaly;
+  const priceDeduction = maxScores.price_anomaly - priceContribution;
+  totalScore = totalScore - maxScores.price_anomaly + priceContribution;
+  
   breakdown.push({ 
     type: 'price_anomaly', 
-    points: priceCheck.anomaly ? Math.round(-weights.price_anomaly * 0.7) : 0,
-    details: priceCheck.reason || 'Price within market range'
+    points: -priceDeduction,
+    details: priceCheck.message
   });
 
-  // Listing Quality (20% weight) - combines photos and floor plan
+  // Listing Quality (35 points max: base 20 + bonuses up to 15)
   const qualityCheck = checkListingQuality(listingData);
-  totalScore += (qualityCheck.score * weights.listing_quality) / 100;
+  const qualityContribution = (qualityCheck.score / 35) * maxScores.listing_quality;
+  totalScore = totalScore - maxScores.listing_quality + qualityContribution;
+  
   breakdown.push({ 
     type: 'photo_count', 
-    points: qualityCheck.photoPoints,
-    details: qualityCheck.photoDetails
+    points: Math.round(qualityContribution - maxScores.listing_quality), // Show actual contribution vs max
+    details: qualityCheck.message + ` (${qualityCheck.score}/35 quality points)`
   });
 
-  // Freshness (10% weight)
+  // Freshness (10 points max)
   const freshnessCheck = checkListingFreshness(listingData.lastUpdated);
-  totalScore += (freshnessCheck.score * weights.freshness) / 100;
+  const freshnessContribution = (freshnessCheck.score / 10) * maxScores.freshness;
+  totalScore = totalScore - maxScores.freshness + freshnessContribution;
+  
   breakdown.push({ 
     type: 'freshness', 
-    points: freshnessCheck.points,
-    details: freshnessCheck.details
-  });
-
-  // Duplicates (15% weight)
-  const duplicateCheck = checkDuplicateListing(listingData);
-  const duplicateScore = duplicateCheck.duplicate ? 20 : 100;
-  totalScore += (duplicateScore * weights.duplicates) / 100;
-  breakdown.push({ 
-    type: 'duplicate', 
-    points: duplicateCheck.duplicate ? Math.round(-weights.duplicates * 0.8) : 0,
-    details: duplicateCheck.duplicate ? 'Potential duplicate detected' : 'Unique listing'
-  });
-
-  // Advertiser (15% weight)
-  const advertiserCheck = checkAdvertiserCredibility(listingData);
-  totalScore += (advertiserCheck.score * weights.advertiser) / 100;
-  breakdown.push({ 
-    type: 'generic_email', 
-    points: advertiserCheck.points,
-    details: advertiserCheck.details
+    points: Math.round(freshnessContribution - maxScores.freshness), // Show actual contribution vs max
+    details: freshnessCheck.message + ` (${freshnessCheck.score}/10 freshness points)`
   });
 
   // Ensure score stays within bounds
   const finalScore = Math.max(0, Math.min(100, Math.round(totalScore)));
+  
+  console.log('[TrustShield v1.2.3] Score calculation complete:', { 
+    totalScore, 
+    finalScore,
+    breakdown: breakdown.map(b => ({ type: b.type, points: b.points, details: b.details }))
+  });
+
+  // INTENSIVE DEBUG: Show step-by-step calculation
+  console.log('[TrustShield v1.2.3] STEP-BY-STEP DEBUG:');
+  console.log('  Safety:', safetyScore, '/15 points =', safetyContribution.toFixed(1), 'contribution');
+  console.log('  Price:', priceScore, '/40 points =', priceContribution.toFixed(1), 'contribution');  
+  console.log('  Quality:', qualityCheck.score, '/35 points =', qualityContribution.toFixed(1), 'contribution');
+  console.log('  Freshness:', freshnessCheck.score, '/10 points =', freshnessContribution.toFixed(1), 'contribution');
+  console.log('  Total contributions:', (safetyContribution + priceContribution + qualityContribution + freshnessContribution).toFixed(1));
+  console.log('  Final totalScore:', totalScore.toFixed(1), '→ finalScore:', finalScore);
+  console.log('  Expected for 12 photos: Safety(15) + Price(40) + Quality(30) + Freshness(10) = 95');
 
   return {
     score: finalScore,
     breakdown: breakdown,
     riskLevel: getRiskLevel(finalScore),
-    listingData: listingData
+    listingData: listingData,
+    _debug: {
+      version: '1.1.2',
+      phase: 'Phase 1 - Foundation Release',
+      maxScores: maxScores,
+      totalScore: totalScore,
+      finalScore: finalScore
+    }
   };
 }
 
@@ -804,135 +897,165 @@ function checkScamKeywords(description) {
   };
 }
 
+// Phase 1 Price Anomaly Detection (40% weight)
 function checkPriceAnomaly(price, size, neighborhood) {
-  if (!price || !size || !neighborhood) {
-    return { anomaly: false, reason: '' };
-  }
-
-  const pricePerSqm = price / size;
-  const lowerNeighborhood = neighborhood.toLowerCase();
-  let avgPricePerSqm = null;
-
-  // Check if the neighborhood string includes any of our keys
-  for (const key in NEIGHBORHOOD_AVG_PRICES) {
-    if (lowerNeighborhood.includes(key)) {
-      avgPricePerSqm = NEIGHBORHOOD_AVG_PRICES[key];
-      break;
-    }
-  }
-
-  if (!avgPricePerSqm) {
-    return { anomaly: false, reason: 'No price data for neighborhood' };
-  }
-
-  const priceRatio = pricePerSqm / avgPricePerSqm;
+  console.log('[TrustShield v1.2.3] Checking price anomaly:', { price, size, neighborhood });
   
-  if (priceRatio < 0.6) {
-    return { anomaly: true, reason: 'Price per m² significantly below market average' };
-  }
-
-  return { anomaly: false, reason: '' };
-}
-
-// Combined listing quality check (photos + floor plan + description)
-function checkListingQuality(listingData) {
-  let qualityScore = 100;
-  let photoPoints = 0;
-  let photoDetails = '';
-  
-  const photoCount = listingData.photoCount || 0;
-  const hasFloorPlan = listingData.hasFloorPlan || false;
-  const descriptionLength = (listingData.fullDescription || '').length;
-  
-  // Photo evaluation (major component)
-  if (photoCount >= 23) {
-    qualityScore = 100;
-    photoPoints = 0;
-    photoDetails = `Excellent photo coverage (${photoCount} photos)`;
-  } else if (photoCount >= 15) {
-    qualityScore = 85;
-    photoPoints = 0;
-    photoDetails = `Good photo coverage (${photoCount} photos)`;
-  } else if (photoCount >= 8) {
-    qualityScore = 70;
-    photoPoints = -3;
-    photoDetails = `Adequate photos (${photoCount} photos)`;
-  } else if (photoCount >= 3) {
-    qualityScore = 40;
-    photoPoints = -8;
-    photoDetails = `Few photos (${photoCount} photos)`;
-  } else {
-    qualityScore = 20;
-    photoPoints = -12;
-    photoDetails = `Very few photos (${photoCount} photos)`;
-  }
-  
-  // Floor plan bonus
-  if (hasFloorPlan) {
-    qualityScore = Math.min(100, qualityScore + 10);
-    photoPoints += 2;
-  }
-  
-  // Description quality
-  if (descriptionLength < 100) {
-    qualityScore = Math.max(20, qualityScore - 15);
-    photoPoints -= 2;
-  } else if (descriptionLength > 500) {
-    qualityScore = Math.min(100, qualityScore + 5);
-    photoPoints += 1;
-  }
-  
-  return {
-    score: qualityScore,
-    photoPoints: Math.round(photoPoints),
-    photoDetails: photoDetails
-  };
-}
-
-function checkListingFreshness(lastUpdated) {
-  if (!lastUpdated) {
+  if (!price || !size || price <= 0 || size <= 0) {
     return { 
-      score: 50, 
-      points: -2, 
-      details: 'Update date unknown' 
+      severity: 'none', 
+      message: 'Could not verify price - no penalty applied'
     };
   }
 
+  const pricePerSqm = price / size;
+  const neighborhood_avg = NEIGHBORHOOD_AVG_PRICES[neighborhood] || NEIGHBORHOOD_AVG_PRICES['Barcelona Average'];
+  
+  // Major scam indicator - significantly below market
+  if (pricePerSqm < neighborhood_avg * 0.4) {
+    return { 
+      severity: 'major',
+      message: `Warning: Price significantly below market rate (€${pricePerSqm.toFixed(0)}/m² vs €${neighborhood_avg}/m² average) - potential scam indicator`
+    };
+  }
+  
+  // Minor warning - moderately below market  
+  if (pricePerSqm < neighborhood_avg * 0.6) {
+    return { 
+      severity: 'minor',
+      message: `Price appears low for this area (€${pricePerSqm.toFixed(0)}/m² vs €${neighborhood_avg}/m² average) - verify before proceeding`
+    };
+  }
+  
+  // Minor warning - significantly above market
+  if (pricePerSqm > neighborhood_avg * 1.5) {
+    return { 
+      severity: 'minor',
+      message: `Price appears high for this area (€${pricePerSqm.toFixed(0)}/m² vs €${neighborhood_avg}/m² average) - verify before proceeding`
+    };
+  }
+  
+  return { 
+    severity: 'none',
+    message: `Price of €${pricePerSqm.toFixed(0)}/m² is consistent with the ${neighborhood} area average`
+  };
+}
+
+// Phase 1 Listing Quality Assessment (35 points max)
+function checkListingQuality(listingData) {
+  const photoCount = parseInt(listingData.photoCount) || 0;
+  const description = listingData.fullDescription || '';
+  
+  console.log('[TrustShield v1.2.3] Quality check:', { 
+    photoCount, 
+    photoCountType: typeof listingData.photoCount,
+    originalPhotoCount: listingData.photoCount,
+    descriptionLength: description.length, 
+    hasFloorPlan: listingData.hasFloorPlan 
+  });
+  
+  // Start with baseline quality score (20 points)
+  let qualityScore = 20;
+  let photoMessage = '';
+  
+  // Photo scoring: 0-15 points based on count (adjusted for 20-30 photo reality)
+  if (photoCount >= 35) {
+    qualityScore += 15; // 35 total
+    photoMessage = `Exceptional photo coverage with ${photoCount} photos`;
+    console.log('[TrustShield v1.2.3] Photo logic: 35+ photos, score = 35');
+  } else if (photoCount >= 25) {
+    qualityScore += 12; // 32 total
+    photoMessage = `Excellent photo coverage with ${photoCount} photos`;
+    console.log('[TrustShield v1.2.3] Photo logic: 25-34 photos, score = 32');
+  } else if (photoCount >= 18) {
+    qualityScore += 8; // 28 total  
+    photoMessage = `Very good photo coverage with ${photoCount} photos`;
+    console.log('[TrustShield v1.2.3] Photo logic: 18-24 photos, score = 28');
+  } else if (photoCount >= 12) {
+    qualityScore += 4; // 24 total
+    photoMessage = `Good photo coverage with ${photoCount} photos`;
+    console.log('[TrustShield v1.2.3] Photo logic: 12-17 photos, score = 24');
+  } else if (photoCount >= 6) {
+    qualityScore += 0; // 20 total (baseline)
+    photoMessage = `Adequate photos (${photoCount} photos) - basic coverage`;
+    console.log('[TrustShield v1.2.3] Photo logic: 6-11 photos, score = 20');
+  } else if (photoCount >= 3) {
+    qualityScore -= 5; // 15 total
+    photoMessage = `Few photos (${photoCount} photos) - consider with caution`;
+    console.log('[TrustShield v1.2.3] Photo logic: 3-5 photos, score = 15');
+  } else if (photoCount >= 1) {
+    qualityScore -= 10; // 10 total
+    photoMessage = `Very few photos (only ${photoCount}) - major concern`;
+    console.log('[TrustShield v1.2.3] Photo logic: 1-2 photos, score = 10');
+  } else {
+    qualityScore -= 15; // 5 total
+    photoMessage = 'No photos available - major red flag';
+    console.log('[TrustShield v1.2.3] Photo logic: 0 photos, score = 5');
+  }
+  
+  // Floor plan bonus: +5 points
+  if (listingData.hasFloorPlan) {
+    qualityScore += 5;
+    photoMessage += ' + includes floor plan';
+  }
+  
+  // Description quality: +5 or -5 points
+  if (description.length >= 200) {
+    qualityScore += 5;
+    photoMessage += ' + detailed description';
+  } else if (description.length < 50) {
+    qualityScore -= 5;
+    photoMessage += ' - very brief description';
+  }
+  
+  // Ensure within bounds (0-35) BEFORE logging
+  qualityScore = Math.max(0, Math.min(35, qualityScore));
+  
+  console.log('[TrustShield v1.2.3] 🔧 FIXED Quality calculation: base=20, photos=' + (photoCount >= 35 ? 15 : photoCount >= 25 ? 12 : photoCount >= 18 ? 8 : photoCount >= 12 ? 4 : photoCount >= 6 ? 0 : photoCount >= 3 ? -5 : photoCount >= 1 ? -10 : -15) + ', floorPlan=' + (listingData.hasFloorPlan ? 5 : 0) + ', description=' + (description.length >= 200 ? 5 : description.length < 50 ? -5 : 0) + ', final=' + qualityScore);
+  
+  console.log('[TrustShield v1.2.3] Quality result:', { qualityScore, photoMessage });
+  
+  return {
+    score: qualityScore,
+    message: photoMessage
+  };
+}
+
+// Phase 1 Freshness Assessment (10 points max)
+function checkListingFreshness(lastUpdated) {
+  console.log('[TrustShield v1.2.3] Freshness check:', { lastUpdated });
+  
+  let freshnessScore = 10; // Start with full points
+  let message = '';
+  
+  if (!lastUpdated) {
+    freshnessScore = 5; // Lose half points for unknown date
+    message = 'Update date unknown - moderate penalty applied';
+  } else {
   const updateDate = new Date(lastUpdated);
   const now = new Date();
   const daysDiff = (now - updateDate) / (1000 * 60 * 60 * 24);
 
-  if (daysDiff < 7) {
-    return { 
-      score: 100, 
-      points: 0, 
-      details: 'Recently updated (within 7 days)' 
-    };
-  } else if (daysDiff < 14) {
-    return { 
-      score: 85, 
-      points: 0, 
-      details: 'Updated within 2 weeks' 
-    };
-  } else if (daysDiff < 30) {
-    return { 
-      score: 70, 
-      points: -1, 
-      details: 'Updated within a month' 
-    };
-  } else if (daysDiff < 60) {
-    return { 
-      score: 40, 
-      points: -3, 
-      details: `Not updated for ${Math.round(daysDiff)} days` 
-    };
-  } else {
-    return { 
-      score: 20, 
-      points: -5, 
-      details: `Stale listing (${Math.round(daysDiff)} days old)` 
-    };
+    console.log('[TrustShield v1.2.3] Days since update:', daysDiff);
+
+    if (daysDiff < 14) {
+      freshnessScore = 10; // Full points
+      message = 'Recently updated - likely still available';
+    } else if (daysDiff < 30) {
+      freshnessScore = 7; // Lose some points
+      message = `Updated ${Math.round(daysDiff)} days ago - confirm availability`;
+    } else {
+      freshnessScore = 3; // Lose most points
+      message = `Not updated in ${Math.round(daysDiff)} days - may no longer be available`;
+    }
   }
+  
+  console.log('[TrustShield v1.2.3] Freshness result:', { freshnessScore, message });
+  
+  return { 
+    score: freshnessScore,
+    message: message
+  };
 }
 
 function checkAdvertiserCredibility(listingData) {
@@ -996,46 +1119,21 @@ function checkGenericEmail(email) {
 }
 
 function getRiskLevel(score) {
-  // V0 spec: High Trust (85-100), Medium Trust (40-84), Low Trust (0-39)
+  // Phase 1 spec: High Trust (85-100), Medium Trust (65-84), Low Trust (0-64)
   if (score >= 85) {
-    return 'low';    // High trust = low risk
-  } else if (score >= 40) {
-    return 'medium'; // Medium trust = medium risk
+    return 'low';    // High trust = low risk - "Very promising listing"
+  } else if (score >= 65) {
+    return 'medium'; // Medium trust = medium risk - "Minor issues to review"
   } else {
-    return 'high';   // Low trust = high risk
+    return 'high';   // Low trust = high risk - "Proceed with caution"
   }
 }
 
-// Caching Functions
-async function getCachedScore(listingUrl) {
-  try {
-    const result = await chrome.storage.local.get(listingUrl);
-    const cached = result[listingUrl];
-    
-    if (cached && cached.timestamp) {
-      const cacheAge = Date.now() - cached.timestamp;
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-      
-      if (cacheAge < maxAge) {
-        return cached.data;
-      }
-    }
-  } catch (error) {
-    console.error('Error reading from cache:', error);
-  }
-  
-  return null;
-}
+// Caching Functions - DISABLED FOR DEBUGGING
+// async function getCachedScore(listingUrl) {
+//   return null; // Always return null = no cache
+// }
 
-async function setCachedScore(listingUrl, scoreData) {
-  try {
-    const cacheEntry = {
-      data: scoreData,
-      timestamp: Date.now()
-    };
-    
-    await chrome.storage.local.set({ [listingUrl]: cacheEntry });
-  } catch (error) {
-    console.error('Error writing to cache:', error);
-  }
-} 
+// async function setCachedScore(listingUrl, scoreData) {
+//   // Do nothing = no caching
+// } 
