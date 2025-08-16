@@ -12,7 +12,11 @@ function HandDrawnShield({ className, size = 16, color = 'currentColor', variant
     viewBox: '0 0 24 24',
     fill: 'none',
     className: className,
-    style: { flexShrink: 0 }
+    style: { 
+      flexShrink: 0,
+      boxShadow: 'none !important',
+      filter: 'none !important'
+    }
   }, React.createElement('path', {
     d: 'M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1Z',
     stroke: color,
@@ -98,12 +102,9 @@ function TrustBadgeProduction(props) {
     userSelect: 'none',
     transition: 'all 300ms ease',
     boxShadow: '0 2px 6px rgba(0, 0, 0, 0.3)', // Stronger shadow for larger element
-    // GLARING VISUAL CHANGE: Bright red border and pulsing animation
-    border: '3px solid #ff0000 !important',
-    outline: '2px solid #ff0000',
-    outlineOffset: '2px',
+
     fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
-    animation: !showFinal ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'pulse-red 1.5s infinite',
+    animation: !showFinal ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
     margin: '0' // Remove margin to let wrapper handle positioning
   };
 
@@ -141,7 +142,7 @@ function TrustBadgeProduction(props) {
   React.createElement(HandDrawnShield, { 
     size: 18, // 75% of 24px 
     color: colors.color,
-    variant: 'dashed'
+    variant: 'outline'
   }),
   showFinal ? String(score) : '...'
   );
@@ -360,23 +361,20 @@ const shadowStyles = `
     -moz-osx-font-smoothing: grayscale;
   }
   
+  /* Prevent child elements from inheriting shadows */
+  .trust-shield-root svg,
+  .trust-shield-root path,
+  .trust-shield-root * {
+    box-shadow: none !important;
+    filter: none !important;
+  }
+  
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
   }
   
-  @keyframes pulse-red {
-    0%, 100% { 
-      border-color: #ff0000;
-      outline-color: #ff0000;
-      box-shadow: 0 0 10px #ff0000;
-    }
-    50% { 
-      border-color: #ff6666;
-      outline-color: #ff6666;
-      box-shadow: 0 0 20px #ff6666;
-    }
-  }
+
   
   @keyframes slideUp {
     from { transform: translateY(100%); }

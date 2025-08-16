@@ -21,7 +21,7 @@ import './index.js';
     
     if (url.includes('/inmueble/')) {
       return 'listing';
-    } else if (url.includes('/alquiler-viviendas/') || url.includes('/venta-viviendas/')) {
+    } else if (url.includes('/alquiler-viviendas/') || url.includes('/venta-viviendas/') || url.includes('/point/alquiler-viviendas/') || url.includes('/point/venta-viviendas/')) {
       return 'search';
     } else if (url.includes('/usuario/favoritos/') || url.includes('/user/favorites/')) {
       return 'favorites';
@@ -51,11 +51,10 @@ import './index.js';
         listingUrl = window.location.origin + listingUrl;
       }
 
-      // Find the image container for badge injection (try multiple selectors)
-      const imageContainer = element.querySelector('.item-multimedia-pictures__container') ||
-                             element.querySelector('.item-multimedia-pictures') ||
-                             element.querySelector('.item-multimedia') ||
-                             element.querySelector('picture');
+      // Find the image container for badge injection (target main multimedia container)
+      const imageContainer = element.querySelector('.item-multimedia') ||
+                             element.querySelector('picture') ||
+                             element.querySelector('.item-multimedia-pictures');
 
       // Extract basic data visible on search page for initial scoring
       const priceElement = element.querySelector('.item-price');
@@ -254,12 +253,16 @@ import './index.js';
             'right: 8px !important',
             'z-index: 999 !important',
             'pointer-events: auto',
-            'background: rgba(255,0,0,0.08)'
+            'padding: 8px !important',
+            'margin: -8px !important',
+            'overflow: visible !important'
           ].join(';');
 
           if (getComputedStyle(listingData.imageContainer).position === 'static') {
             listingData.imageContainer.style.position = 'relative';
           }
+          // Ensure the image container doesn't clip the badge overflow
+          listingData.imageContainer.style.overflow = 'visible';
           wrapper.appendChild(container);
           listingData.imageContainer.appendChild(wrapper);
           return;
