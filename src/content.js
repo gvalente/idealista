@@ -444,8 +444,8 @@ import './index.js';
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.innerHTML = '×';
     closeBtn.style.position = 'absolute';
-    closeBtn.style.top = '16px';
-    closeBtn.style.right = '16px';
+    closeBtn.style.top = isMobile ? '16px' : '20px';
+    closeBtn.style.right = isMobile ? '16px' : '20px';
     closeBtn.style.width = '32px';
     closeBtn.style.height = '32px';
     closeBtn.style.borderRadius = '8px';
@@ -466,6 +466,37 @@ import './index.js';
       closeBtn.style.transform = 'scale(1)';
     };
 
+    // Get risk level first (needed for colors)
+    const riskLevel = scoreData.riskLevel || 'low';
+
+    // Get colors based on risk level to match the collapsed pill
+    function getDialogColors(riskLevel) {
+      switch (riskLevel) {
+        case 'low': // High trust (85-100)
+          return {
+            background: '#7c9885', // sage green
+            color: '#7c9885'
+          };
+        case 'medium': // Medium trust (65-84)
+          return {
+            background: '#d4a574', // ochre
+            color: '#d4a574'
+          };
+        case 'high': // Low trust (0-64)
+          return {
+            background: '#c17b6b', // terracotta
+            color: '#c17b6b'
+          };
+        default:
+          return {
+            background: '#7c9885',
+            color: '#7c9885'
+          };
+      }
+    }
+
+    const dialogColors = getDialogColors(riskLevel);
+
     // Shield icon and title
     const headerContainer = document.createElement('div');
     headerContainer.style.display = 'flex';
@@ -480,7 +511,7 @@ import './index.js';
     shieldContainer.style.width = '48px';
     shieldContainer.style.height = '48px';
     shieldContainer.style.borderRadius = '12px';
-    shieldContainer.style.background = '#7c9885'; // sage color
+    shieldContainer.style.background = dialogColors.background;
     shieldContainer.innerHTML = `
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <path d="M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1Z" 
@@ -502,7 +533,7 @@ import './index.js';
     scoreDisplay.textContent = `${scoreData.score}/100`;
     scoreDisplay.style.fontSize = '24px';
     scoreDisplay.style.fontWeight = '700';
-    scoreDisplay.style.color = '#7c9885'; // sage color
+    scoreDisplay.style.color = dialogColors.color; // Match the shield color
     scoreDisplay.style.margin = '4px 0 0 0';
 
     titleSection.appendChild(title);
@@ -510,20 +541,7 @@ import './index.js';
     headerContainer.appendChild(shieldContainer);
     headerContainer.appendChild(titleSection);
 
-    // Description paragraph
-    const description = document.createElement('p');
-    const riskLevel = scoreData.riskLevel || 'low';
-    if (riskLevel === 'low') {
-      description.textContent = 'This listing looks very promising and appears to be from a serious seller. It includes plenty of detail and has no major red flags detected.';
-    } else if (riskLevel === 'medium') {
-      description.textContent = 'This listing has some areas of concern but may still be legitimate. Exercise caution and verify details before proceeding.';
-    } else {
-      description.textContent = 'This listing has multiple red flags and should be approached with extreme caution. Consider looking for alternative options.';
-    }
-    description.style.color = '#4a4a4a';
-    description.style.lineHeight = '1.6';
-    description.style.margin = '0 0 24px 0';
-    description.style.fontSize = '14px';
+
 
     // Analysis Breakdown section
     const analysisTitle = document.createElement('h3');
@@ -608,12 +626,15 @@ import './index.js';
     let expandedItem = null; // Track which accordion item is expanded
 
     analysisItems.forEach(function(item, index) {
-      // Determine status from breakdown data
+      // Determine status from breakdown data - only show warnings/fails for actual negative impacts
       let status = 'pass';
       if (item.breakdown) {
-        if (item.breakdown.points < 0) {
-          status = Math.abs(item.breakdown.points) > 20 ? 'fail' : 'caution';
+        if (item.breakdown.points < -20) {
+          status = 'fail';  // Major negative impact
+        } else if (item.breakdown.points < -5) {
+          status = 'caution';  // Minor negative impact
         }
+        // Otherwise keep 'pass' - even if points are slightly negative but not significant
       }
 
       const accordionItem = document.createElement('div');
@@ -639,30 +660,26 @@ import './index.js';
 
       const statusIcon = createStatusIcon(status);
       
-      // Single line with title and status summary (like v0 design)
+      // Vertical layout with title and status summary stacked
       const textSection = document.createElement('div');
       textSection.style.display = 'flex';
-      textSection.style.alignItems = 'center';
-      textSection.style.gap = '8px';
+      textSection.style.flexDirection = 'column';
+      textSection.style.gap = '2px';
       
       const itemTitle = document.createElement('div');
       itemTitle.textContent = item.title;
       itemTitle.style.fontWeight = '500';
       itemTitle.style.color = '#4a4a4a';
       itemTitle.style.fontSize = '15px';
-
-      const bullet = document.createElement('div');
-      bullet.textContent = '•';
-      bullet.style.color = '#d1d5db';
-      bullet.style.fontSize = '12px';
+      itemTitle.style.lineHeight = '1.2';
 
       const itemSummary = document.createElement('div');
       itemSummary.textContent = item.breakdown?.details || item.summary;
-      itemSummary.style.color = '#9ca3af';
-      itemSummary.style.fontSize = '14px';
+      itemSummary.style.color = '#6b7280';
+      itemSummary.style.fontSize = '13px';
+      itemSummary.style.lineHeight = '1.3';
 
       textSection.appendChild(itemTitle);
-      textSection.appendChild(bullet);
       textSection.appendChild(itemSummary);
       leftSection.appendChild(statusIcon);
       leftSection.appendChild(textSection);
@@ -678,16 +695,16 @@ import './index.js';
       expandedContent.style.maxHeight = '0';
       expandedContent.style.overflow = 'hidden';
       expandedContent.style.transition = 'max-height 300ms ease-in-out';
-      expandedContent.style.borderTop = '1px solid rgba(74, 74, 74, 0.1)';
 
       const expandedInner = document.createElement('div');
-      expandedInner.style.padding = '16px';
+      expandedInner.style.padding = '16px 0';
+      expandedInner.style.paddingLeft = '32px'; // Align with text content (20px icon + 12px gap)
       expandedInner.style.fontSize = '13px';
       expandedInner.style.color = '#4a4a4a';
       expandedInner.style.lineHeight = '1.5';
 
-      // Create expanded content based on breakdown type
-      const explanationText = getExplanationText(item.breakdown?.type, item.breakdown);
+      // Create expanded content based on breakdown type (pass full scoreData for accurate info)
+      const explanationText = getExplanationText(item.breakdown?.type, item.breakdown, scoreData);
       expandedInner.textContent = explanationText;
 
       expandedContent.appendChild(expandedInner);
@@ -724,12 +741,12 @@ import './index.js';
 
       itemHeader.addEventListener('click', toggleAccordion);
 
-      // Minimal hover effects (just opacity change)
+      // Hover effects (subtle background overlay)
       itemHeader.onmouseenter = function() {
-        itemHeader.style.opacity = '0.7';
+        itemHeader.style.background = 'rgba(0, 0, 0, 0.03)';
       };
       itemHeader.onmouseleave = function() {
-        itemHeader.style.opacity = '1';
+        itemHeader.style.background = 'transparent';
       };
 
       // Keyboard navigation
@@ -750,8 +767,9 @@ import './index.js';
     });
 
     // Helper function to generate explanation text based on analysis type
-    function getExplanationText(type, breakdown) {
+    function getExplanationText(type, breakdown, scoreData) {
       const points = breakdown?.points || 0;
+      const listingData = scoreData?.listingData || {};
       
       switch (type) {
         case 'scam_keywords':
@@ -760,20 +778,34 @@ import './index.js';
             : 'No suspicious language patterns detected. The listing description uses professional and trustworthy language.';
         
         case 'price_anomaly':
+          const pricePerSqm = listingData.price && listingData.size ? (listingData.price / listingData.size).toFixed(0) : null;
+          const neighborhood = listingData.neighborhood || 'this area';
           return points < 0
-            ? `The price per square meter is significantly below market average, which could indicate a scam or hidden costs. The average for this area is around €20-25/m².`
-            : 'The price appears to be within normal market range for this area and property type.';
+            ? `The price per square meter${pricePerSqm ? ` (€${pricePerSqm}/m²)` : ''} appears to be significantly below market average for ${neighborhood}, which could indicate a scam or hidden costs.`
+            : `The price${pricePerSqm ? ` of €${pricePerSqm}/m²` : ''} appears to be within normal market range for ${neighborhood} and this property type.`;
         
         case 'photo_count':
-          const photoCount = breakdown?.listingData?.photoCount || 0;
+          const photoCount = listingData.photoCount || 0;
           return photoCount < 5
             ? `Only ${photoCount} photos provided. Quality listings typically include 15+ photos showing different rooms and angles.`
-            : `${photoCount} photos provided, showing good visual coverage of the property.`;
+            : `${photoCount} photos provided, showing ${photoCount >= 15 ? 'excellent' : photoCount >= 10 ? 'good' : 'adequate'} visual coverage of the property.`;
         
         case 'freshness':
+          const lastUpdated = listingData.lastUpdated;
+          let daysSinceUpdate = null;
+          if (lastUpdated) {
+            try {
+              const updateDate = new Date(lastUpdated);
+              const now = new Date();
+              daysSinceUpdate = Math.floor((now - updateDate) / (1000 * 60 * 60 * 24));
+            } catch (e) {
+              // Ignore date parsing errors
+            }
+          }
+          
           return points < 0
-            ? 'This listing hasn\'t been updated recently, which may indicate it\'s no longer available or the advertiser isn\'t actively managing it.'
-            : 'The listing was recently updated, suggesting the advertiser is actively managing it.';
+            ? `This listing hasn't been updated recently${daysSinceUpdate ? ` (${daysSinceUpdate} days ago)` : ''}, which may indicate it's no longer available or the advertiser isn't actively managing it.`
+            : `The listing was recently updated${daysSinceUpdate !== null ? ` (${daysSinceUpdate} days ago)` : ''}, suggesting the advertiser is actively managing it.`;
         
         case 'duplicate':
           return points < 0
@@ -818,7 +850,6 @@ import './index.js';
     
     cardRelative.appendChild(closeBtn);
     cardRelative.appendChild(headerContainer);
-    cardRelative.appendChild(description);
     cardRelative.appendChild(analysisTitle);
     cardRelative.appendChild(analysisContainer);
 
@@ -971,7 +1002,7 @@ import './index.js';
   // Initialize the extension
   function initialize() {
     try {
-      console.log('Idealista Trust Shield content v1.2.3: initialize start');
+      console.log('Idealista Trust Shield content v1.3.5: initialize start');
       // Detect page type
       pageType = detectPageType();
       
@@ -980,7 +1011,7 @@ import './index.js';
         return;
       }
       
-              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.2.3)');
+              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.3.5)');
       
       // Process existing content
       if (pageType === 'search' || pageType === 'favorites') {
@@ -990,16 +1021,11 @@ import './index.js';
         processListingPage();
       }
       
-      // Always inject a Shadow DOM debug badge at the top of the page
-      try {
-        injectDebugBadge();
-      } catch (e) {
-        console.warn('Idealista Trust Shield: Failed to inject debug badge:', e);
-      }
+
       
-      console.log('Idealista Trust Shield: Initialization complete (v1.2.3)');
+      console.log('Idealista Trust Shield: Initialization complete (v1.3.5)');
     } catch (error) {
-      console.error('Idealista Trust Shield: Initialization failed (v1.2.3):', error);
+      console.error('Idealista Trust Shield: Initialization failed (v1.3.5):', error);
     }
   }
 
@@ -1033,61 +1059,7 @@ import './index.js';
     }
   }, 1000);
 
-  // Debug Shadow DOM badge placed at the very top of the page to isolate styles and clicks
-  function injectDebugBadge() {
-    if (document.getElementById('idealista-trust-shield-debug-host')) {
-      return;
-    }
 
-    const host = document.createElement('div');
-    host.id = 'idealista-trust-shield-debug-host';
-    document.body.insertBefore(host, document.body.firstChild);
-
-    const shadow = host.attachShadow({ mode: 'open' });
-
-    // Outer container ensures the badge is always visible and non-blocking
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.top = '0';
-    container.style.left = '0';
-    container.style.right = '0';
-    container.style.width = '100%';
-    container.style.zIndex = '2147483647';
-    container.style.display = 'flex';
-    container.style.justifyContent = 'center';
-    container.style.padding = '8px 0';
-    container.style.pointerEvents = 'none';
-
-    // Inner wrapper re-enables pointer events for the chip only
-    const inner = document.createElement('div');
-    inner.style.pointerEvents = 'auto';
-    container.appendChild(inner);
-    shadow.appendChild(container);
-
-    const listingData = pageType === 'listing' ? extractCurrentListingData() : null;
-    if (!listingData) {
-      const neutral = document.createElement('div');
-      neutral.textContent = 'Trust Shield active';
-      neutral.style.padding = '6px 10px';
-      neutral.style.background = '#eef2ff';
-      neutral.style.color = '#3730a3';
-      neutral.style.borderRadius = '9999px';
-      neutral.style.fontSize = '12px';
-      neutral.style.fontWeight = '600';
-      neutral.style.border = '1px solid rgba(55,48,163,0.2)';
-      neutral.style.boxShadow = '0 1px 2px rgba(0,0,0,0.06)';
-      inner.appendChild(neutral);
-      return;
-    }
-
-    const mount = document.createElement('div');
-    inner.appendChild(mount);
-
-    window.renderTrustShield(mount, { listingData, scoreData: null, isLoading: true, onClick: showDetailedBreakdown });
-    requestListingScore(listingData, function(response) {
-      window.renderTrustShield(mount, { listingData, scoreData: response, isLoading: false, onClick: showDetailedBreakdown });
-    });
-  }
 
   // Start initialization when DOM is ready
   if (document.readyState === 'loading') {
