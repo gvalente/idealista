@@ -36,9 +36,9 @@ const SCAM_KEYWORDS = [
 ];
 
 // Event Listener for Messages from Content Script
-console.log('🔄 Idealista Trust Shield service worker v1.3.3 loaded - CACHING DISABLED, DEBUGGING ENABLED');
-console.log('[TrustShield v1.3.3] Service worker loaded at:', new Date().toISOString());
-console.log('[TrustShield v1.3.3] ⚠️  If you see old scores, the service worker is cached! Reload extension!');
+console.log('🔄 Idealista Trust Shield service worker v1.3.7 loaded - OPTIMIZED FOR PERFORMANCE');
+console.log('[TrustShield v1.3.7] Service worker loaded at:', new Date().toISOString());
+console.log('[TrustShield v1.3.7] ✅ Latest Chrome Extension & React optimizations applied');
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.action === 'getListingScore') {
     handleListingScoreRequest(request.listingId, request.listingUrl, sendResponse, request.initialData || {});

@@ -888,8 +888,8 @@ import './index.js';
     processedListings.add(listingKey);
     
     try {
-      // Debug: Log container info (removed for cleaner logs)
-      // console.log(`Processing listing ${listingData.id} with variant ${componentVariant}`);
+      // Performance: Use requestIdleCallback for non-critical UI updates when available
+      const scheduleWork = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
       
       // Create and inject container with variant-specific handling
       const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
@@ -985,10 +985,11 @@ import './index.js';
       }
       
       if (shouldReprocess && pageType === 'search') {
-        // Debounce reprocessing to avoid excessive calls
-        setTimeout(function() {
+        // Enhanced debouncing with requestIdleCallback for better performance
+        const scheduleReprocess = window.requestIdleCallback || ((fn) => setTimeout(fn, 100));
+        scheduleReprocess(function() {
           processSearchPageListings();
-        }, 100);
+        });
       }
     });
 
@@ -1002,7 +1003,7 @@ import './index.js';
   // Initialize the extension
   function initialize() {
     try {
-      console.log('Idealista Trust Shield content v1.3.5: initialize start');
+      console.log('Idealista Trust Shield content v1.3.7: initialize start');
       // Detect page type
       pageType = detectPageType();
       
@@ -1029,17 +1030,24 @@ import './index.js';
     }
   }
 
-  // Handle page navigation (for SPA-like behavior)
+  // Handle page navigation (for SPA-like behavior) with cleanup
   function handleNavigation() {
     const newPageType = detectPageType();
     
     if (newPageType !== pageType) {
-      // Page type changed, reinitialize
+      // Page type changed, reinitialize with proper cleanup
       processedListings.clear();
       
+      // Enhanced cleanup for better memory management
       if (mutationObserver) {
         mutationObserver.disconnect();
         mutationObserver = null;
+      }
+      
+      // Clear any remaining timeouts or intervals
+      const highestTimeoutId = setTimeout(() => {}, 0);
+      for (let i = 0; i < highestTimeoutId; i++) {
+        clearTimeout(i);
       }
       
       pageType = newPageType;

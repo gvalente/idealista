@@ -154,6 +154,7 @@ function TrustShieldCollapsedProduction(props) {
   const [displayScore, setDisplayScore] = React.useState(cachedScore || null);
   const [isUpdating, setIsUpdating] = React.useState(false);
   
+  // Simplified effect management without over-memoization
   React.useEffect(() => {
     if (cachedScore && !displayScore) {
       setDisplayScore(cachedScore);
@@ -165,7 +166,7 @@ function TrustShieldCollapsedProduction(props) {
       const newScoreData = scoreData.data;
       const newScore = newScoreData.score;
       
-      console.log('[TrustShield v1.2.3] 🎯 UI UPDATE - Received new score data:', {
+      console.log('[TrustShield v1.3.7] 🎯 UI UPDATE - Received new score data:', {
         newScore,
         currentDisplayScore: displayScore?.score,
         willUpdate: !displayScore || displayScore.score !== newScore,
@@ -175,10 +176,13 @@ function TrustShieldCollapsedProduction(props) {
       if (displayScore && displayScore.score !== newScore) {
         // Show update animation when cached differs from fresh
         setIsUpdating(true);
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
           setDisplayScore(newScoreData);
           setIsUpdating(false);
         }, 150);
+        
+        // Cleanup timeout to prevent memory leaks
+        return () => clearTimeout(timeoutId);
       } else {
         // Always update if no display score or first time
         setDisplayScore(newScoreData);
