@@ -15,6 +15,13 @@ import './index.js';
   let processedListings = new Set();
   let mutationObserver = null;
 
+  // Dynamic search page state tracking  
+  let currentUrl = window.location.href;
+  let lastKnownListings = new Map(); // listingId -> element reference
+  let activeContainers = new Map(); // containerId -> React root
+  let searchResultsContainer = null;
+  let urlChangeObserver = null;
+
   // Page type detection
   function detectPageType() {
     const url = window.location.href;
@@ -105,11 +112,22 @@ import './index.js';
       const planEl = element.querySelector('[data-button-type="plan"], .icon-plan, .icono-plano, .floor-plan');
       if (planEl) hasFloorPlan = true;
 
-      // Description snippet
+      // Description snippet - enhanced extraction
       let fullDescription = null;
-      const descEl = element.querySelector('.item-description, .item-description.description, .item-description .ellipsis');
-      if (descEl) {
-        fullDescription = (descEl.textContent || '').trim() || null;
+      const descSelectors = [
+        '.item-description',
+        '.item-description.description', 
+        '.item-description .ellipsis',
+        '.item-detail-text',
+        '.item-info .description'
+      ];
+      
+      for (const selector of descSelectors) {
+        const descEl = element.querySelector(selector);
+        if (descEl && descEl.textContent && descEl.textContent.trim()) {
+          fullDescription = descEl.textContent.trim();
+          break;
+        }
       }
 
       // Last updated
@@ -204,11 +222,12 @@ import './index.js';
           return;
         }
         
-        console.log('[TrustShield v1.2.3] 📨 RECEIVED RESPONSE FROM SERVICE WORKER:', {
+        console.log('[TrustShield v1.4.5] 📨 RECEIVED RESPONSE FROM SERVICE WORKER:', {
           success: response?.success,
           score: response?.data?.score,
           breakdown: response?.data?.breakdown?.length,
-          listingId: listingData.id
+          listingId: listingData.id,
+          dataSource: response?.data?._debug?.dataSource
         });
         
         callback(response);
@@ -219,30 +238,98 @@ import './index.js';
     }
   }
 
-  // Create root container for React component
+  // Enhanced root container management with tracking
   function createRootContainer(targetElement, listingId) {
+    try {
+      if (!targetElement || !listingId) {
+        console.error('[TrustShield v1.4.5] Invalid parameters for createRootContainer:', { targetElement, listingId });
+        return null;
+      }
+      
     const containerId = ROOT_CONTAINER_ID + '-' + listingId;
     
-    // Always create a new container to avoid React createRoot issues
-    const existingContainer = document.getElementById(containerId);
-    if (existingContainer) {
-      existingContainer.remove();
+      // Check if we already have an active container for this listing
+      if (activeContainers.has(containerId)) {
+        const existing = activeContainers.get(containerId);
+        if (existing && existing.container) {
+          return existing.container;
+        }
+      }
+      
+      // Clean up any existing container
+      const existingContainer = document.getElementById(containerId);
+      if (existingContainer) {
+        cleanupContainer(containerId);
     }
 
     // Create new container
-    const container = document.createElement('div');
+      const container = document.createElement('div');
+      if (!container) {
+        console.error('[TrustShield v1.4.5] Failed to create DOM element');
+        return null;
+      }
+      
     container.id = containerId;
     container.className = EXTENSION_ID + '-container';
-    
-    // Add styles to prevent conflicts and ensure proper display
-    container.style.cssText = 'all: initial; font-family: system-ui, -apple-system, sans-serif; display: block;';
+      container.setAttribute('data-listing-id', listingId);
+      
+      // Add styles to prevent conflicts and ensure proper display
+      container.style.cssText = 'all: initial; font-family: system-ui, -apple-system, sans-serif; display: block;';
+      
+      // Track the container
+      activeContainers.set(containerId, {
+        container: container,
+        listingId: listingId,
+        element: targetElement,
+        created: Date.now()
+      });
     
     return container;
+    } catch (error) {
+      console.error('[TrustShield v1.4.5] Error creating root container:', error);
+      return null;
+    }
+  }
+
+  // Clean up container and its tracking
+  function cleanupContainer(containerId) {
+    try {
+      const containerInfo = activeContainers.get(containerId);
+      if (containerInfo) {
+        // Remove from DOM if still present
+        if (containerInfo.container && containerInfo.container.parentNode) {
+          containerInfo.container.parentNode.removeChild(containerInfo.container);
+        }
+        
+        // Remove from tracking
+        activeContainers.delete(containerId);
+        
+        console.log(`[TrustShield v1.4.5] Cleaned up container for listing ${containerInfo.listingId}`);
+      }
+      
+      // Also check DOM directly
+      const domContainer = document.getElementById(containerId);
+      if (domContainer && domContainer.parentNode) {
+        domContainer.parentNode.removeChild(domContainer);
+      }
+    } catch (error) {
+      console.warn(`[TrustShield v1.4.5] Error cleaning up container ${containerId}:`, error);
+    }
   }
 
   // Inject container into the appropriate location per v0 spec
   function injectContainer(container, listingData, pageType, componentVariant) {
     try {
+      if (!container) {
+        console.error('[TrustShield v1.4.5] Container is null/undefined, cannot inject');
+        return;
+      }
+      
+      if (!listingData || !listingData.element) {
+        console.error('[TrustShield v1.4.5] Invalid listing data or element, cannot inject container');
+        return;
+      }
+      
       if (pageType === 'search' && componentVariant === 'badge') {
         // For search results, inject badge into image container (v0 spec: top-right of image)
         if (listingData.imageContainer) {
@@ -269,10 +356,22 @@ import './index.js';
         }
       }
 
-      listingData.element.appendChild(container);
+      // Fallback: append to main element
+      if (listingData.element && listingData.element.appendChild) {
+        listingData.element.appendChild(container);
+        } else {
+        console.error('[TrustShield v1.4.5] Cannot append container - element has no appendChild method');
+      }
     } catch (error) {
-      console.error('Error injecting container:', error);
-      listingData.element.appendChild(container);
+      console.error('[TrustShield v1.4.5] Error injecting container:', error);
+      // Try fallback injection
+      try {
+        if (listingData && listingData.element && listingData.element.appendChild && container) {
+          listingData.element.appendChild(container);
+        }
+      } catch (fallbackError) {
+        console.error('[TrustShield v1.4.5] Fallback injection also failed:', fallbackError);
+      }
     }
   }
 
@@ -356,7 +455,7 @@ import './index.js';
       overlay.style.alignItems = 'flex-end';
       overlay.style.justifyContent = 'center';
       overlay.style.padding = '0';
-    } else {
+        } else {
       // Desktop: centered modal
       overlay.style.display = 'flex';
       overlay.style.alignItems = 'center';
@@ -866,7 +965,7 @@ import './index.js';
           host.parentNode.removeChild(host);
         }
         window.removeEventListener('keydown', onKey);
-      } catch (error) {
+    } catch (error) {
         console.error('[TrustShield v1.2.3] Error in teardown:', error);
       }
     }
@@ -876,8 +975,120 @@ import './index.js';
     window.addEventListener('keydown', onKey);
   }
 
+  // Process a listing with immediate loading state, then smooth transition to final score
+  function processListingWithLoadingState(listingData, componentVariant = 'badge', fadeInDelay = 0) {
+    // Validate input parameters
+    if (!listingData) {
+      console.error('[TrustShield v1.4.5] processListingWithLoadingState called with null/undefined listingData');
+      return;
+    }
+    
+    if (!listingData.id || typeof listingData.id !== 'string') {
+      console.error('[TrustShield v1.4.5] processListingWithLoadingState called with invalid listing ID:', listingData.id, typeof listingData.id);
+      return;
+    }
+    
+    if (!listingData.element) {
+      console.error('[TrustShield v1.4.5] processListingWithLoadingState called with missing element:', listingData);
+      return;
+    }
+    
+    const listingKey = listingData.id + ':' + listingData.url + ':' + componentVariant;
+    
+    // Check if we already have a Trust Shield for this listing
+    const existingContainer = document.getElementById(`idealista-trust-shield-${listingData.id}-${componentVariant}`);
+    if (existingContainer && existingContainer.parentNode) {
+      console.log(`[TrustShield v1.4.5] ⚠️ Trust Shield already exists for ${listingData.id}, skipping duplicate`);
+      return;
+    } else if (existingContainer && !existingContainer.parentNode) {
+      console.log(`[TrustShield v1.4.5] 🔧 Found orphaned container for ${listingData.id}, cleaning up and recreating`);
+      existingContainer.remove();
+    }
+    
+    try {
+      // Create and inject container immediately
+      const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
+      
+      if (!container) {
+        console.error('[TrustShield v1.4.5] Failed to create container for listing:', listingData.id);
+        return;
+      }
+      
+      injectContainer(container, listingData, pageType, componentVariant);
+      
+      // Add initial fade-in styles
+      container.style.opacity = '0';
+      container.style.transform = 'scale(0.9)';
+      container.style.transition = 'opacity 300ms ease, transform 300ms ease';
+      
+      // Show loading state immediately (no cascading delay)
+      renderComponent(container, listingData, null, true, componentVariant);
+      
+      // Trigger fade-in animation
+      requestAnimationFrame(() => {
+        container.style.opacity = '1';
+        container.style.transform = 'scale(1)';
+      });
+      
+      // Start score calculation in background
+      calculateScoreWithTransition(container, listingData, componentVariant);
+      
+    } catch (error) {
+      console.error('[TrustShield v1.4.5] Error in processListingWithLoadingState:', error);
+      // Fallback to regular processing
+      processListing(listingData, componentVariant);
+    }
+  }
+  
+  // Helper function to calculate score and smoothly transition from loading state
+  function calculateScoreWithTransition(container, listingData, componentVariant) {
+    chrome.runtime.sendMessage({
+      action: 'getListingScore',
+      listingId: listingData.id,
+      listingUrl: listingData.url,
+      initialData: {
+        price: listingData.price,
+        size: listingData.size,
+        neighborhood: listingData.neighborhood,
+        photoCount: listingData.photoCount,
+        hasFloorPlan: listingData.hasFloorPlan,
+        fullDescription: listingData.fullDescription,
+        lastUpdated: listingData.lastUpdated
+      }
+    }, function(response) {
+      if (response && response.success) {
+        console.log('[TrustShield v1.4.5] 📨 Score calculated, transitioning from loading state:', {
+          score: response.data?.score,
+          listingId: listingData.id
+        });
+        
+        // Smooth transition from loading to final score
+        renderComponent(container, listingData, response, false, componentVariant);
+      } else {
+        console.error('[TrustShield v1.4.5] Score calculation failed for listing:', listingData.id, response?.error);
+        // Keep the loading state or show error state
+      }
+    });
+  }
+
   // Process a single listing with appropriate component variant
   function processListing(listingData, componentVariant = 'collapsed') {
+    // Validate input parameters
+    if (!listingData) {
+      console.error('[TrustShield v1.4.5] processListing called with null/undefined listingData');
+      return;
+    }
+    
+    if (!listingData.id || typeof listingData.id !== 'string') {
+      console.error('[TrustShield v1.4.5] processListing called with invalid listing ID:', listingData.id, typeof listingData.id);
+      return;
+    }
+    
+    if (!listingData.element) {
+      console.error('[TrustShield v1.4.5] processListing called with missing element:', listingData);
+      return;
+    }
+    
     const listingKey = listingData.id + ':' + listingData.url + ':' + componentVariant;
     
     // Skip if already processed
@@ -893,6 +1104,12 @@ import './index.js';
       
       // Create and inject container with variant-specific handling
       const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
+      
+      if (!container) {
+        console.error('[TrustShield v1.4.5] Failed to create container for listing:', listingData.id);
+        return;
+      }
+      
       injectContainer(container, listingData, pageType, componentVariant);
       
       // Render loading state with staggered delay for search results
@@ -909,16 +1126,135 @@ import './index.js';
     }
   }
 
-  // Find and process all listings on search page with badges (v0 spec)
+  // Enhanced dynamic search page processing with DOM diffing approach
   function processSearchPageListings() {
     const listingElements = document.querySelectorAll('article.item[data-element-id]');
+    const currentListings = new Map();
     
+    console.log(`[TrustShield v1.4.5] 🔍 Processing ${listingElements.length} listings on search page`);
+    
+    // Build current listings map
     for (let i = 0; i < listingElements.length; i++) {
       const element = listingElements[i];
+      const listingId = element.getAttribute('data-element-id');
+      if (listingId) {
+        currentListings.set(listingId, element);
+      }
+    }
+    
+    // Detect changes using morphdom-inspired diffing approach
+    const changes = detectListingChanges(lastKnownListings, currentListings);
+    
+    // Handle removed listings
+    if (changes.removed.length > 0) {
+      console.log(`[TrustShield v1.4.5] 🗑️ Removing Trust Shields for ${changes.removed.length} listings:`, changes.removed);
+      changes.removed.forEach(listingId => {
+        cleanupListingTrustShield(listingId);
+      });
+    }
+    
+    // Handle new listings with immediate loading state + smooth transitions
+    if (changes.added.length > 0) {
+      console.log(`[TrustShield v1.4.5] ➕ Adding Trust Shields for ${changes.added.length} new listings with loading states:`, changes.added);
+      changes.added.forEach((listingId, index) => {
+        const element = currentListings.get(listingId);
+        if (element) {
+          // Extract listing data for immediate loading state
+          const listingData = extractListingData(element);
+          const listingKey = listingData?.id + ':' + listingData?.url + ':badge';
+          
+          if (listingData && !processedListings.has(listingKey)) {
+            processedListings.add(listingKey);
+            
+            // Immediately show loading state (no cascading delay)
+            processListingWithLoadingState(listingData, 'badge', 0);
+          }
+        }
+      });
+    }
+    
+    // Special case: If we have very few persistent listings and many new ones, 
+    // it might be a complete page refresh (like after filters)
+    if (changes.persistent.length < 3 && changes.added.length > 5) {
+      console.log(`[TrustShield v1.4.5] 🔄 Detected potential page refresh (${changes.persistent.length} persistent, ${changes.added.length} new) - forcing full reprocess`);
+      // Force process all listings to ensure Trust Shields appear
+      currentListings.forEach((element, listingId) => {
+        // Check if this listing already has a Trust Shield
+        const existingContainer = document.getElementById(ROOT_CONTAINER_ID + '-' + listingId + '-badge');
+        if (!existingContainer) {
+          console.log(`[TrustShield v1.4.5] 🔧 Force processing listing ${listingId}`);
+          processNewListing(element, listingId);
+        }
+      });
+    }
+    
+    // Handle persistent listings (no change needed but update tracking)
+    if (changes.persistent.length > 0) {
+      console.log(`[TrustShield v1.4.5] ✅ ${changes.persistent.length} listings remain unchanged`);
+    }
+    
+    // Update our known state
+    lastKnownListings = new Map(currentListings);
+    
+    console.log(`[TrustShield v1.4.5] 📊 Search page state: ${changes.persistent.length} persistent, ${changes.added.length} added, ${changes.removed.length} removed`);
+  }
+  
+  // Morphdom-inspired change detection
+  function detectListingChanges(oldListings, newListings) {
+    const changes = {
+      added: [],
+      removed: [],
+      persistent: []
+    };
+    
+    // Find removed listings
+    for (const [listingId] of oldListings) {
+      if (!newListings.has(listingId)) {
+        changes.removed.push(listingId);
+      }
+    }
+    
+    // Find added and persistent listings
+    for (const [listingId] of newListings) {
+      if (oldListings.has(listingId)) {
+        changes.persistent.push(listingId);
+      } else {
+        changes.added.push(listingId);
+      }
+    }
+    
+    return changes;
+  }
+  
+  // Clean up Trust Shield for a specific listing
+  function cleanupListingTrustShield(listingId) {
+    try {
+      // Clean up badge containers
+      const badgeContainerId = ROOT_CONTAINER_ID + '-' + listingId + '-badge';
+      cleanupContainer(badgeContainerId);
+      
+      // Clean up any other variant containers
+      const collapsedContainerId = ROOT_CONTAINER_ID + '-' + listingId + '-collapsed';
+      cleanupContainer(collapsedContainerId);
+      
+      // Remove from processed listings
+      const badgeKey = listingId + ':' + currentUrl + ':badge';
+      const collapsedKey = listingId + ':' + currentUrl + ':collapsed';
+      processedListings.delete(badgeKey);
+      processedListings.delete(collapsedKey);
+      
+      console.log(`[TrustShield v1.4.5] 🧹 Cleaned up Trust Shield for listing ${listingId}`);
+    } catch (error) {
+      console.warn(`[TrustShield v1.4.5] Error cleaning up listing ${listingId}:`, error);
+    }
+  }
+  
+  // Process a new listing that appeared
+  function processNewListing(element, listingId) {
+    try {
       const listingData = extractListingData(element);
       
       if (listingData) {
-        // Use badge variant for search results per v0 spec
         // Bootstrap missing fields from card DOM if possible
         try {
           // photo counter on card
@@ -932,8 +1268,14 @@ import './index.js';
           if (hasPlan) listingData.hasFloorPlan = true;
         } catch (_) {}
 
-        processListing(listingData, 'badge');
+        // Use requestIdleCallback for non-blocking processing
+        const scheduleWork = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
+        scheduleWork(() => {
+          processListing(listingData, 'badge');
+        });
       }
+    } catch (error) {
+      console.warn(`[TrustShield v1.4.5] Error processing new listing ${listingId}:`, error);
     }
   }
 
@@ -947,33 +1289,86 @@ import './index.js';
     }
   }
 
-  // Handle dynamic content loading with MutationObserver
+  // Enhanced dynamic content monitoring system
   function observePageChanges() {
     if (mutationObserver) {
       mutationObserver.disconnect();
     }
 
+    // Cache the search results container reference
+    searchResultsContainer = document.querySelector('.items-container.items-list, section.items-container, main.listing-items');
+    
+    if (pageType === 'search' && searchResultsContainer) {
+      console.log(`[TrustShield v1.4.5] 👀 Monitoring search results container for changes`);
+      
+      // Enhanced MutationObserver with targeted observation
     mutationObserver = new MutationObserver(function(mutations) {
       let shouldReprocess = false;
+        let significantChanges = false;
       
       for (let i = 0; i < mutations.length; i++) {
         const mutation = mutations[i];
         
         if (mutation.type === 'childList') {
+            // Check if changes occurred within the search results container
+            const targetIsSearchContainer = mutation.target === searchResultsContainer ||
+                                          searchResultsContainer.contains(mutation.target);
+            
+            if (targetIsSearchContainer) {
+              // Check for listing additions/removals
           for (let j = 0; j < mutation.addedNodes.length; j++) {
             const node = mutation.addedNodes[j];
             
             if (node.nodeType === Node.ELEMENT_NODE) {
-              // Check if new listing was added
               if (node.matches && node.matches('article.item[data-element-id]')) {
                 shouldReprocess = true;
+                significantChanges = true;
                 break;
               }
               
-              // Check if new listings were added inside this node
               if (node.querySelector && node.querySelector('article.item[data-element-id]')) {
                 shouldReprocess = true;
+                significantChanges = true;
                 break;
+              }
+              
+              // Check for search results container replacement (indicates filter changes)
+              if (node.classList && (
+                node.classList.contains('items-container') ||
+                node.classList.contains('search-list') ||
+                node.classList.contains('listing-items') ||
+                node.id === 'searchResults'
+              )) {
+                console.log(`[TrustShield v1.4.5] 🔄 Search container updated via mutation, forcing reprocess`);
+                shouldReprocess = true;
+                significantChanges = true;
+                
+                // Force refresh in case this is a filter change
+                setTimeout(() => {
+                  processedListings.clear();
+                  processSearchPageListings();
+                }, 300);
+                break;
+              }
+            }
+          }
+              
+              // Check for listing removals
+              for (let j = 0; j < mutation.removedNodes.length; j++) {
+                const node = mutation.removedNodes[j];
+                
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                  if (node.matches && node.matches('article.item[data-element-id]')) {
+                    shouldReprocess = true;
+                    significantChanges = true;
+                    break;
+                  }
+                  
+                  if (node.querySelector && node.querySelector('article.item[data-element-id]')) {
+                    shouldReprocess = true;
+                    significantChanges = true;
+                    break;
+                  }
               }
             }
           }
@@ -985,25 +1380,286 @@ import './index.js';
       }
       
       if (shouldReprocess && pageType === 'search') {
-        // Enhanced debouncing with requestIdleCallback for better performance
-        const scheduleReprocess = window.requestIdleCallback || ((fn) => setTimeout(fn, 100));
-        scheduleReprocess(function() {
+          if (significantChanges) {
+            console.log(`[TrustShield v1.4.5] 🔄 Significant DOM changes detected, reprocessing search results`);
+          }
+          
+          // Enhanced debouncing with requestIdleCallback for better performance
+          const scheduleReprocess = window.requestIdleCallback || ((fn) => setTimeout(fn, 100));
+          scheduleReprocess(function() {
           processSearchPageListings();
-        });
-      }
-    });
+          });
+        }
+      });
 
-    // Start observing
+      // Observe with targeted scope for better performance
+      mutationObserver.observe(searchResultsContainer, {
+        childList: true,
+        subtree: true,
+        attributes: false, // We don't need attribute changes
+        characterData: false // We don't need text changes
+      });
+    } else {
+      // Fallback to document.body observation for other page types
+      mutationObserver = new MutationObserver(function(mutations) {
+        // Original logic for non-search pages
+        let shouldReprocess = false;
+        
+        for (let i = 0; i < mutations.length; i++) {
+          const mutation = mutations[i];
+          
+          if (mutation.type === 'childList') {
+            for (let j = 0; j < mutation.addedNodes.length; j++) {
+              const node = mutation.addedNodes[j];
+              
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.matches && node.matches('article.item[data-element-id]')) {
+                  shouldReprocess = true;
+                  break;
+                }
+                
+                if (node.querySelector && node.querySelector('article.item[data-element-id]')) {
+                  shouldReprocess = true;
+                  break;
+                }
+              }
+            }
+          }
+          
+          if (shouldReprocess) {
+            break;
+          }
+        }
+        
+        if (shouldReprocess && pageType === 'search') {
+          const scheduleReprocess = window.requestIdleCallback || ((fn) => setTimeout(fn, 100));
+          scheduleReprocess(function() {
+            processSearchPageListings();
+          });
+        }
+      });
+
     mutationObserver.observe(document.body, {
       childList: true,
       subtree: true
     });
+    }
+  }
+  
+  // URL change monitoring for filter updates
+  function setupUrlMonitoring() {
+    // Monitor URL changes (for SPA-style navigation and filter updates)
+    urlChangeObserver = new MutationObserver(() => {
+      const newUrl = window.location.href;
+      if (newUrl !== currentUrl) {
+        console.log(`[TrustShield v1.4.5] 🔗 URL changed from ${currentUrl} to ${newUrl}`);
+        handleUrlChange(currentUrl, newUrl);
+        currentUrl = newUrl;
+      }
+    });
+    
+    // Monitor document title changes (often indicates page/filter changes)
+    urlChangeObserver.observe(document.querySelector('title'), {
+      childList: true,
+      subtree: true
+    });
+    
+    // Also listen for popstate events
+    window.addEventListener('popstate', function(event) {
+      const newUrl = window.location.href;
+      if (newUrl !== currentUrl) {
+        console.log(`[TrustShield v1.4.5] 🔙 Browser navigation from ${currentUrl} to ${newUrl}`);
+        handleUrlChange(currentUrl, newUrl);
+        currentUrl = newUrl;
+      }
+    });
+    
+    // Monitor for pushState/replaceState changes (common in SPAs)
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+    
+    history.pushState = function(...args) {
+      originalPushState.apply(history, args);
+      const newUrl = window.location.href;
+      if (newUrl !== currentUrl) {
+        console.log(`[TrustShield v1.4.5] ⏭️ pushState navigation from ${currentUrl} to ${newUrl}`);
+        handleUrlChange(currentUrl, newUrl);
+        currentUrl = newUrl;
+      }
+    };
+    
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(history, args);
+      const newUrl = window.location.href;
+      if (newUrl !== currentUrl) {
+        console.log(`[TrustShield v1.4.5] 🔄 replaceState navigation from ${currentUrl} to ${newUrl}`);
+        handleUrlChange(currentUrl, newUrl);
+        currentUrl = newUrl;
+      }
+    };
+  }
+  
+  // Handle URL changes (filters, search parameters, etc.)
+  function handleUrlChange(oldUrl, newUrl) {
+    try {
+      const oldPageType = detectPageType();
+      const newPageType = detectPageType();
+      
+      // If we're staying on the same page type but URL changed, it's likely a filter change
+      if (oldPageType === 'search' && newPageType === 'search') {
+        console.log(`[TrustShield v1.4.5] 🔍 Filter/search change detected, refreshing listings`);
+        
+        // Clear processed listings for this URL context immediately
+        clearProcessedListingsForUrl(oldUrl);
+        
+        // Clear the last known listings to force a fresh comparison
+        lastKnownListings.clear();
+        
+        // Give the page a moment to update the DOM, then force reprocessing
+        const scheduleRefresh = window.requestIdleCallback || ((fn) => setTimeout(fn, 300));
+        scheduleRefresh(() => {
+          console.log(`[TrustShield v1.4.5] 🔄 Processing search page after filter change`);
+          
+          // First check if our dynamic monitoring already handled it
+          const currentListingCount = document.querySelectorAll('article.item[data-element-id]').length;
+          const processedCount = processedListings.size;
+          
+          console.log(`[TrustShield v1.4.5] 📊 Current listings: ${currentListingCount}, Processed: ${processedCount}`);
+          
+          // Only do full reprocessing if the dynamic monitoring missed some
+          if (processedCount < currentListingCount * 0.8) { // If less than 80% processed
+            console.log(`[TrustShield v1.4.5] 🔄 Dynamic monitoring missed some listings, doing full reprocess`);
+            processSearchPageListings();
+          } else {
+            console.log(`[TrustShield v1.4.5] ✅ Dynamic monitoring handled most listings, skipping duplicate processing`);
+          }
+          
+          // Final verification check (only if needed)
+          setTimeout(() => {
+            const listingElements = document.querySelectorAll('article.item[data-element-id]');
+            const missingShields = [];
+            
+            for (const element of listingElements) {
+              const listingId = element.getAttribute('data-element-id');
+              if (listingId) {
+                // Check multiple ways to find existing shields
+                const shieldContainer = element.querySelector('[id*="idealista-trust-shield"]') ||
+                                       element.querySelector('[class*="idealista-trust-shield"]') ||
+                                       document.getElementById(`idealista-trust-shield-${listingId}-badge`);
+                
+                if (!shieldContainer) {
+                  missingShields.push(element);
+                } else {
+                  // Verify the shield is actually attached and visible
+                  if (!shieldContainer.parentNode || !document.body.contains(shieldContainer)) {
+                    console.log(`[TrustShield v1.4.5] 🔧 Found detached shield for ${listingId}, treating as missing`);
+                    missingShields.push(element);
+                  }
+                }
+              }
+            }
+            
+            if (missingShields.length > 0) {
+              console.log(`[TrustShield v1.4.5] 🔍 Final verification: ${missingShields.length} missing shields, adding them`);
+              
+              missingShields.forEach((element, index) => {
+                const listingData = extractListingData(element);
+                if (listingData) {
+                  const listingKey = listingData.id + ':' + listingData.url + ':badge';
+                  console.log(`[TrustShield v1.4.5] 🔧 Processing missing shield for listing ${listingData.id}, processed key: ${listingKey}`);
+                  
+                  if (!processedListings.has(listingKey)) {
+                    processedListings.add(listingKey);
+                    
+                    try {
+                      // Use fallback to regular processListing if loading state fails
+                      processListingWithLoadingState(listingData, 'badge', 0);
+                      console.log(`[TrustShield v1.4.5] ✅ Successfully initiated shield for ${listingData.id}`);
+                    } catch (error) {
+                      console.error(`[TrustShield v1.4.5] ❌ Loading state failed for ${listingData.id}, trying regular processing:`, error);
+                      try {
+                        processListing(listingData, 'badge');
+                        console.log(`[TrustShield v1.4.5] ✅ Fallback processing succeeded for ${listingData.id}`);
+                      } catch (fallbackError) {
+                        console.error(`[TrustShield v1.4.5] ❌ Both methods failed for ${listingData.id}:`, fallbackError);
+                      }
+                    }
+                  } else {
+                    console.log(`[TrustShield v1.4.5] ⚠️ Listing ${listingData.id} already in processed set but DOM shield missing`);
+                    
+                    // Force reprocessing if processed but DOM element missing
+                    try {
+                      processListingWithLoadingState(listingData, 'badge', 0);
+                      console.log(`[TrustShield v1.4.5] ✅ Force reprocessed ${listingData.id}`);
+                    } catch (error) {
+                      console.error(`[TrustShield v1.4.5] ❌ Force reprocessing failed for ${listingData.id}:`, error);
+                    }
+                  }
+                } else {
+                  console.error(`[TrustShield v1.4.5] ❌ Failed to extract listing data for element:`, element);
+                }
+              });
+              
+              // Verify results after a short delay
+              setTimeout(() => {
+                const stillMissing = missingShields.filter(element => {
+                  const listingId = element.getAttribute('data-element-id');
+                  const shieldContainer = element.querySelector('[id*="idealista-trust-shield"]') ||
+                                         document.getElementById(`idealista-trust-shield-${listingId}-badge`);
+                  return listingId && (!shieldContainer || !document.body.contains(shieldContainer));
+                });
+                
+                if (stillMissing.length > 0) {
+                  const stillMissingIds = stillMissing.map(el => el.getAttribute('data-element-id'));
+                  console.warn(`[TrustShield v1.4.5] ⚠️ ${stillMissing.length} shields still missing after processing:`, stillMissingIds);
+                  
+                  // Last resort: try one more time with regular processing
+                  stillMissing.forEach(element => {
+                    const listingData = extractListingData(element);
+                    if (listingData) {
+                      console.log(`[TrustShield v1.4.5] 🆘 Last resort processing for ${listingData.id}`);
+                      try {
+                        processListing(listingData, 'badge');
+                      } catch (error) {
+                        console.error(`[TrustShield v1.4.5] ❌ Last resort failed for ${listingData.id}:`, error);
+                      }
+                    }
+                  });
+                } else {
+                  console.log(`[TrustShield v1.4.5] ✅ All missing shields successfully added`);
+                }
+              }, 800);
+            } else {
+              console.log(`[TrustShield v1.4.5] ✅ All listings have Trust Shields`);
+            }
+          }, 1000); // Reduced from 1500ms to 1000ms
+        });
+      } else if (oldPageType !== newPageType) {
+        // Page type changed, reinitialize completely
+        console.log(`[TrustShield v1.4.5] 📄 Page type changed from ${oldPageType} to ${newPageType}, reinitializing`);
+        handleNavigation();
+      }
+    } catch (error) {
+      console.warn(`[TrustShield v1.4.5] Error handling URL change:`, error);
+    }
+  }
+  
+  // Clear processed listings for a specific URL
+  function clearProcessedListingsForUrl(url) {
+    const keysToRemove = [];
+    for (const key of processedListings) {
+      if (key.includes(url)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => processedListings.delete(key));
+    console.log(`[TrustShield v1.4.5] 🧹 Cleared ${keysToRemove.length} processed listings for URL change`);
   }
 
   // Initialize the extension
   function initialize() {
     try {
-      console.log('Idealista Trust Shield content v1.3.7: initialize start');
+      console.log('Idealista Trust Shield content v1.4.5: initialize start - CSP-compliant data handling');
       // Detect page type
       pageType = detectPageType();
       
@@ -1018,6 +1674,7 @@ import './index.js';
       if (pageType === 'search' || pageType === 'favorites') {
         processSearchPageListings();
         observePageChanges();
+        setupUrlMonitoring(); // Monitor for filter/search changes
       } else if (pageType === 'listing') {
         processListingPage();
       }
@@ -1030,27 +1687,40 @@ import './index.js';
     }
   }
 
-  // Handle page navigation (for SPA-like behavior) with cleanup
+  // Handle page navigation (for SPA-like behavior) with comprehensive cleanup
   function handleNavigation() {
     const newPageType = detectPageType();
     
     if (newPageType !== pageType) {
-      // Page type changed, reinitialize with proper cleanup
-      processedListings.clear();
+      console.log(`[TrustShield v1.4.5] 🧭 Navigation: ${pageType} → ${newPageType}`);
       
-      // Enhanced cleanup for better memory management
+      // Comprehensive cleanup
+      processedListings.clear();
+      lastKnownListings.clear();
+      
+      // Cleanup all active containers
+      for (const [containerId, containerInfo] of activeContainers) {
+        cleanupContainer(containerId);
+      }
+      activeContainers.clear();
+      
+      // Disconnect observers
       if (mutationObserver) {
         mutationObserver.disconnect();
         mutationObserver = null;
       }
       
-      // Clear any remaining timeouts or intervals
-      const highestTimeoutId = setTimeout(() => {}, 0);
-      for (let i = 0; i < highestTimeoutId; i++) {
-        clearTimeout(i);
+      if (urlChangeObserver) {
+        urlChangeObserver.disconnect();
+        urlChangeObserver = null;
       }
       
+      // Clear container references
+      searchResultsContainer = null;
+      
+      // Update state and reinitialize
       pageType = newPageType;
+      currentUrl = window.location.href;
       initialize();
     }
   }
@@ -1059,7 +1729,7 @@ import './index.js';
   window.addEventListener('popstate', handleNavigation);
   
   // Also watch for URL changes (for pushState navigation)
-  let currentUrl = window.location.href;
+  // Note: currentUrl is already declared at the top
   setInterval(function() {
     if (window.location.href !== currentUrl) {
       currentUrl = window.location.href;
