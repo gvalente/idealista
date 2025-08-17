@@ -36,7 +36,8 @@ function TrustBadgeProduction(props) {
     if (isLoading) {
       setShowFinal(false);
     } else {
-      const timer = setTimeout(() => setShowFinal(true), delay);
+      // Smooth transition with slight delay for loading → final state
+      const timer = setTimeout(() => setShowFinal(true), Math.max(delay, 150));
       return () => clearTimeout(timer);
     }
   }, [isLoading, delay]);
@@ -100,12 +101,17 @@ function TrustBadgeProduction(props) {
     fontWeight: '600',
     cursor: showFinal ? 'pointer' : 'default',
     userSelect: 'none',
-    transition: 'all 300ms ease',
+    transition: 'all 400ms cubic-bezier(0.4, 0, 0.2, 1)', // Smoother cubic-bezier transition
     boxShadow: '0 2px 6px rgba(0, 0, 0, 0.3)', // Stronger shadow for larger element
 
     fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
     animation: !showFinal ? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' : 'none',
-    margin: '0' // Remove margin to let wrapper handle positioning
+    margin: '0', // Remove margin to let wrapper handle positioning
+    
+    // Enhanced transition smoothness
+    backfaceVisibility: 'hidden',
+    transform: showFinal ? 'translateZ(0)' : 'translateZ(0) scale(0.98)',
+    willChange: 'transform, background-color, color'
   };
 
   const handleClick = (e) => {
@@ -166,7 +172,7 @@ function TrustShieldCollapsedProduction(props) {
       const newScoreData = scoreData.data;
       const newScore = newScoreData.score;
       
-      console.log('[TrustShield v1.3.7] 🎯 UI UPDATE - Received new score data:', {
+      console.log('[TrustShield v1.4.5] 🎯 UI UPDATE - Received new score data:', {
         newScore,
         currentDisplayScore: displayScore?.score,
         willUpdate: !displayScore || displayScore.score !== newScore,
