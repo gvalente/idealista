@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Idealista Trust Shield",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "description": "Your intelligent co-pilot for navigating Barcelona's rental market with confidence. Provides real-time trust and quality scoring for Idealista listings.",
   "default_locale": "en",
   "permissions": [
@@ -32,7 +32,7 @@
         "*://*.idealista.com/usuario/favoritos/*"
       ],
       "js": ["dist/content.js"],
-      "run_at": "document_end"
+      "run_at": "document_idle"
     }
   ],
   "action": {
@@ -50,10 +50,14 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self';"
+  },
   "web_accessible_resources": [
     {
       "resources": [
-        "fonts/*"
+        "fonts/*",
+        "dist/*"
       ],
       "matches": [
         "*://*.idealista.com/*"
