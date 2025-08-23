@@ -172,7 +172,7 @@ function TrustShieldCollapsedProduction(props) {
       const newScoreData = scoreData.data;
       const newScore = newScoreData.score;
       
-      console.log('[TrustShield v1.4.5] 🎯 UI UPDATE - Received new score data:', {
+      console.log('[TrustShield v1.5.1] 🎯 UI UPDATE - Received new score data:', {
         newScore,
         currentDisplayScore: displayScore?.score,
         willUpdate: !displayScore || displayScore.score !== newScore,
