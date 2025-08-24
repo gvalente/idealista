@@ -272,9 +272,9 @@ const SCAM_KEYWORDS = [
 ];
 
 // Event Listener for Messages from Content Script
-console.log('🔄 Idealista Trust Shield service worker v1.5.6 loaded - CSP-COMPLIANT DATA HANDLING');
-console.log('[TrustShield v1.5.6] Service worker loaded at:', new Date().toISOString());
-console.log('[TrustShield v1.5.6] ✅ Enhanced with robust fallback data generation');
+console.log('🔄 Idealista Trust Shield service worker v1.6.2 loaded - CSP-COMPLIANT DATA HANDLING');
+console.log('[TrustShield v1.6.2] Service worker loaded at:', new Date().toISOString());
+console.log('[TrustShield v1.6.2] ✅ Enhanced with robust fallback data generation');
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.action === 'getListingScore') {
     handleListingScoreRequest(request.listingId, request.listingUrl, sendResponse, request.initialData || {});
@@ -285,19 +285,19 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 // Main Handler for Listing Score Requests
 async function handleListingScoreRequest(listingId, listingUrl, sendResponse, initialData) {
   try {
-    // Check cache first (disabled for v1.5.6 debugging)
+    // Check cache first (disabled for v1.6.2 debugging)
     // const cachedScore = await getCachedScore(listingUrl);
     // if (cachedScore) {
     //   sendResponse({ success: true, data: cachedScore });
     //   return;
     // }
-    console.log('[TrustShield v1.5.6] CACHE DISABLED - forcing fresh calculation with CSP-compliant fallbacks');
+    console.log('[TrustShield v1.6.2] CACHE DISABLED - forcing fresh calculation with CSP-compliant fallbacks');
 
     // Primary: Use initial data from content script (more reliable than fetching)
     let listingData = null;
     
     if (initialData && Object.keys(initialData).length > 0) {
-      console.log(`[TrustShield v1.5.6] Using content script data for ${listingId}:`, initialData);
+      console.log(`[TrustShield v1.6.2] Using content script data for ${listingId}:`, initialData);
       listingData = {
         id: listingId,
         url: listingUrl,
@@ -319,16 +319,16 @@ async function handleListingScoreRequest(listingId, listingUrl, sendResponse, in
       try {
         listingData = await fetchListingData(listingId, listingUrl);
         if (listingData) {
-          console.log(`[TrustShield v1.5.6] Successfully fetched external data for ${listingId}`);
+          console.log(`[TrustShield v1.6.2] Successfully fetched external data for ${listingId}`);
         }
       } catch (error) {
-        console.warn(`[TrustShield v1.5.6] External fetch failed for ${listingId}:`, error.message);
+        console.warn(`[TrustShield v1.6.2] External fetch failed for ${listingId}:`, error.message);
       }
     }
     
     // Last resort: Generate realistic mock data
     if (!listingData) {
-      console.log(`[TrustShield v1.5.6] Generating fallback data for ${listingId} from initial data:`, initialData);
+      console.log(`[TrustShield v1.6.2] Generating fallback data for ${listingId} from initial data:`, initialData);
       listingData = {
         id: listingId,
         url: listingUrl,
@@ -362,7 +362,7 @@ async function handleListingScoreRequest(listingId, listingUrl, sendResponse, in
     };
     
     const cleanedData = applyMockDataGenerationPhase1(phase1Data);
-    console.log(`[TrustShield v1.5.6] Phase 1 cleaned data for scoring:`, cleanedData);
+    console.log(`[TrustShield v1.6.2] Phase 1 cleaned data for scoring:`, cleanedData);
 
     // Calculate score
     const score = calculateScore(cleanedData);
@@ -382,7 +382,7 @@ async function handleListingScoreRequest(listingId, listingUrl, sendResponse, in
     // Caching disabled for debugging
     // await setCachedScore(listingUrl, score);
     
-    console.log('[TrustShield v1.5.6] 🚀 SENDING RESPONSE TO CONTENT SCRIPT:', { 
+    console.log('[TrustShield v1.6.2] 🚀 SENDING RESPONSE TO CONTENT SCRIPT:', { 
       score: score.score, 
       breakdown: score.breakdown.length,
       riskLevel: score.riskLevel,
@@ -390,21 +390,21 @@ async function handleListingScoreRequest(listingId, listingUrl, sendResponse, in
     });
     sendResponse({ success: true, data: score });
   } catch (error) {
-    console.error('[TrustShield v1.5.6] ERROR in service worker:', error);
-    console.error('[TrustShield v1.5.6] Stack trace:', error.stack);
+    console.error('[TrustShield v1.6.2] ERROR in service worker:', error);
+    console.error('[TrustShield v1.6.2] Stack trace:', error.stack);
     sendResponse({ success: false, error: error.message });
   }
 }
 
 // Data Fetching with Primary and Contingency Strategies
 async function fetchListingData(listingId, listingUrl) {
-      console.log(`[TrustShield v1.5.6] Fetching data for ${listingId}`);
+      console.log(`[TrustShield v1.6.2] Fetching data for ${listingId}`);
   
   try {
     // Primary Strategy: Try JSON endpoint first
     const jsonData = await fetchJsonData(listingId);
     if (jsonData) {
-      console.log(`[TrustShield v1.5.6] JSON data found for ${listingId}`);
+      console.log(`[TrustShield v1.6.2] JSON data found for ${listingId}`);
       return parseJsonData(jsonData, listingUrl);
     }
   } catch (error) {
@@ -415,7 +415,7 @@ async function fetchListingData(listingId, listingUrl) {
     // Contingency Plan: Fetch and parse HTML
     const htmlData = await fetchHtmlData(listingUrl);
     if (htmlData) {
-      console.log(`[TrustShield v1.5.6] HTML data fetched for ${listingId}, length: ${htmlData.length}`);
+      console.log(`[TrustShield v1.6.2] HTML data fetched for ${listingId}, length: ${htmlData.length}`);
       let parsed = parseHtmlData(htmlData, listingUrl);
       
       // If key fields are missing, try to extract from embedded JSON (dataLayer or window.__INITIAL_STATE__)
@@ -423,7 +423,7 @@ async function fetchListingData(listingId, listingUrl) {
         try {
           const embedded = extractEmbeddedJson(htmlData);
           if (embedded) {
-            console.log(`[TrustShield v1.5.6] Embedded JSON found for ${listingId}:`, embedded);
+            console.log(`[TrustShield v1.6.2] Embedded JSON found for ${listingId}:`, embedded);
             parsed = {
               ...parsed,
               fullDescription: parsed.fullDescription || embedded.description || '',
@@ -436,16 +436,16 @@ async function fetchListingData(listingId, listingUrl) {
         }
       }
       
-      console.log(`[TrustShield v1.5.6] Final parsed data for ${listingId}:`, parsed);
+      console.log(`[TrustShield v1.6.2] Final parsed data for ${listingId}:`, parsed);
       return parsed;
     } else {
-      console.warn(`[TrustShield v1.5.6] No HTML data returned for ${listingId}`);
+      console.warn(`[TrustShield v1.6.2] No HTML data returned for ${listingId}`);
     }
   } catch (error) {
     console.error('HTML fallback also failed:', error);
   }
 
-  console.warn(`[TrustShield v1.5.6] All data fetching failed for ${listingId}, returning null`);
+  console.warn(`[TrustShield v1.6.2] All data fetching failed for ${listingId}, returning null`);
   return null;
 }
 
@@ -624,7 +624,7 @@ async function fetchJsonData(listingId) {
 // Contingency Plan: Fetch HTML Data
 async function fetchHtmlData(listingUrl) {
   try {
-    console.log(`[TrustShield v1.5.6] Fetching HTML from: ${listingUrl}`);
+    console.log(`[TrustShield v1.6.2] Fetching HTML from: ${listingUrl}`);
     
     const response = await fetch(listingUrl, {
       method: 'GET',
@@ -640,22 +640,22 @@ async function fetchHtmlData(listingUrl) {
       }
     });
 
-    console.log(`[TrustShield v1.5.6] Response status: ${response.status}, ok: ${response.ok}`);
+    console.log(`[TrustShield v1.6.2] Response status: ${response.status}, ok: ${response.ok}`);
 
     if (response.ok) {
       const text = await response.text();
-      console.log(`[TrustShield v1.5.6] HTML length: ${text.length}, first 200 chars: ${text.substring(0, 200)}`);
+      console.log(`[TrustShield v1.6.2] HTML length: ${text.length}, first 200 chars: ${text.substring(0, 200)}`);
       
       if (typeof text === 'string' && text.length > 1000) {
         return text;
       } else {
-        console.warn(`[TrustShield v1.5.6] HTML too short: ${text.length} characters`);
+        console.warn(`[TrustShield v1.6.2] HTML too short: ${text.length} characters`);
       }
     } else {
-      console.warn(`[TrustShield v1.5.6] HTTP error: ${response.status} ${response.statusText}`);
+      console.warn(`[TrustShield v1.6.2] HTTP error: ${response.status} ${response.statusText}`);
     }
   } catch (error) {
-    console.error('[TrustShield v1.5.6] HTML fetch failed:', error);
+    console.error('[TrustShield v1.6.2] HTML fetch failed:', error);
   }
 
   return null;
@@ -737,7 +737,7 @@ function parseHtmlData(htmlText, listingUrl) {
       const el = doc.querySelector(selector);
       if (el) {
         fullDescription = el.textContent.trim();
-        console.log(`[TrustShield v1.5.6] Found description with selector '${selector}': ${fullDescription.substring(0, 100)}...`);
+        console.log(`[TrustShield v1.6.2] Found description with selector '${selector}': ${fullDescription.substring(0, 100)}...`);
         if (fullDescription) break;
       }
     }
@@ -781,7 +781,7 @@ function parseHtmlData(htmlText, listingUrl) {
       const el = doc.querySelector(selector);
       if (el) {
         neighborhood = el.textContent.trim();
-        console.log(`[TrustShield v1.5.6] Found neighborhood with selector '${selector}': ${neighborhood}`);
+        console.log(`[TrustShield v1.6.2] Found neighborhood with selector '${selector}': ${neighborhood}`);
         if (neighborhood) break;
       }
     }
@@ -802,7 +802,7 @@ function parseHtmlData(htmlText, listingUrl) {
       if (el) {
         const text = el.textContent || el.getAttribute('title') || '';
         photoCount = parseInt(text.replace(/[^\d]/g, ''), 10) || 0;
-        console.log(`[TrustShield v1.5.6] Found photo count with selector '${selector}': ${photoCount} (text: "${text}")`);
+        console.log(`[TrustShield v1.6.2] Found photo count with selector '${selector}': ${photoCount} (text: "${text}")`);
         if (photoCount > 0) break;
       }
     }
@@ -822,7 +822,7 @@ function parseHtmlData(htmlText, listingUrl) {
         const imgs = doc.querySelectorAll(selector);
         if (imgs.length > 0) {
           photoCount = imgs.length;
-          console.log(`[TrustShield v1.5.6] Counted ${photoCount} images with selector '${selector}'`);
+          console.log(`[TrustShield v1.6.2] Counted ${photoCount} images with selector '${selector}'`);
           break;
         }
       }
@@ -843,7 +843,7 @@ function parseHtmlData(htmlText, listingUrl) {
     for (const selector of floorPlanSelectors) {
       if (doc.querySelector(selector)) {
         hasFloorPlan = true;
-        console.log(`[TrustShield v1.5.6] Found floor plan with selector '${selector}'`);
+        console.log(`[TrustShield v1.6.2] Found floor plan with selector '${selector}'`);
         break;
       }
     }
@@ -863,7 +863,7 @@ function parseHtmlData(htmlText, listingUrl) {
         const updateText = el.textContent.trim();
         if (updateText) {
           lastUpdated = updateText;
-          console.log(`[TrustShield v1.5.6] Found last updated with selector '${selector}': ${updateText}`);
+          console.log(`[TrustShield v1.6.2] Found last updated with selector '${selector}': ${updateText}`);
           break;
         }
       }
@@ -886,7 +886,7 @@ function parseHtmlData(htmlText, listingUrl) {
       const el = doc.querySelector(selector);
       if (el) {
         advertiserName = (el.textContent || '').trim();
-        console.log(`[TrustShield v1.5.6] Found advertiser name with selector '${selector}': ${advertiserName}`);
+        console.log(`[TrustShield v1.6.2] Found advertiser name with selector '${selector}': ${advertiserName}`);
         if (advertiserName) break;
       }
     }
@@ -901,7 +901,7 @@ function parseHtmlData(htmlText, listingUrl) {
       const match = href && href.match(/mailto:([^?\s]+)/i);
       if (match && match[1]) {
         contactEmail = match[1];
-        console.log(`[TrustShield v1.5.6] Found email via mailto: ${contactEmail}`);
+        console.log(`[TrustShield v1.6.2] Found email via mailto: ${contactEmail}`);
       }
     }
     
@@ -912,7 +912,7 @@ function parseHtmlData(htmlText, listingUrl) {
         contactEmail = emailAttrEl.getAttribute('data-contact-email') || 
                       emailAttrEl.getAttribute('data-email') || 
                       emailAttrEl.getAttribute('data-advertiser-email') || null;
-        if (contactEmail) console.log(`[TrustShield v1.5.6] Found email via data attribute: ${contactEmail}`);
+        if (contactEmail) console.log(`[TrustShield v1.6.2] Found email via data attribute: ${contactEmail}`);
       }
     }
     
@@ -921,7 +921,7 @@ function parseHtmlData(htmlText, listingUrl) {
       const hiddenEmailEl = doc.querySelector('input[name="email"], input[name="contactEmail"], input[name="advertiserEmail"]');
       if (hiddenEmailEl) {
         contactEmail = hiddenEmailEl.value || hiddenEmailEl.getAttribute('value') || null;
-        if (contactEmail) console.log(`[TrustShield v1.5.6] Found email via form input: ${contactEmail}`);
+        if (contactEmail) console.log(`[TrustShield v1.6.2] Found email via form input: ${contactEmail}`);
       }
     }
     
@@ -954,7 +954,7 @@ function parseHtmlData(htmlText, listingUrl) {
     if (inferredTypeFromScripts) advertiserType = inferredTypeFromScripts;
 
     // DEBUG: Log what we extracted
-    console.log(`[TrustShield v1.5.6] Extracted data for ${listingUrl}:`, {
+    console.log(`[TrustShield v1.6.2] Extracted data for ${listingUrl}:`, {
       price, size, neighborhood, photoCount, hasFloorPlan, fullDescription: fullDescription.substring(0, 50) + '...', advertiserName, contactEmail
     });
     
@@ -1029,7 +1029,7 @@ function extractIdFromUrl(url) {
   return match ? match[1] : '';
 }
 
-// Phase 1 Scoring Algorithm - Fixed Math (v1.5.6)
+// Phase 1 Scoring Algorithm - Fixed Math (v1.6.2)
 function calculateScore(listingData) {
   let totalScore = 100; // Start with baseline score
   const breakdown = [];
@@ -1040,7 +1040,7 @@ function calculateScore(listingData) {
     freshness: 10         // Max 10 points (0 to -10)
   };
 
-  console.log('[TrustShield v1.5.6] Starting calculation with data:', {
+  console.log('[TrustShield v1.6.2] Starting calculation with data:', {
     photoCount: listingData.photoCount,
     hasFloorPlan: listingData.hasFloorPlan,
     descriptionLength: (listingData.fullDescription || '').length,
@@ -1082,6 +1082,11 @@ function calculateScore(listingData) {
   const priceDeduction = maxScores.price_anomaly - priceContribution;
   totalScore = totalScore - maxScores.price_anomaly + priceContribution;
   
+  console.log(`[TrustShield v1.6.2] 💰 PRICE CHECK BREAKDOWN DEBUG:`);
+  console.log(`  priceCheck.severity: "${priceCheck.severity}"`);
+  console.log(`  priceCheck.message: "${priceCheck.message}"`);
+  console.log(`  Points deduction: ${-priceDeduction}`);
+  
   breakdown.push({ 
     type: 'price_anomaly', 
     points: -priceDeduction,
@@ -1113,14 +1118,14 @@ function calculateScore(listingData) {
   // Ensure score stays within bounds
   const finalScore = Math.max(0, Math.min(100, Math.round(totalScore)));
   
-  console.log('[TrustShield v1.5.6] Score calculation complete:', { 
+  console.log('[TrustShield v1.6.2] Score calculation complete:', { 
     totalScore, 
     finalScore,
     breakdown: breakdown.map(b => ({ type: b.type, points: b.points, details: b.details }))
   });
 
   // INTENSIVE DEBUG: Show step-by-step calculation
-  console.log('[TrustShield v1.5.6] STEP-BY-STEP DEBUG:');
+  console.log('[TrustShield v1.6.2] STEP-BY-STEP DEBUG:');
   console.log('  Safety:', safetyScore, '/15 points =', safetyContribution.toFixed(1), 'contribution');
   console.log('  Price:', priceScore, '/40 points =', priceContribution.toFixed(1), 'contribution');  
   console.log('  Quality:', qualityCheck.score, '/35 points =', qualityContribution.toFixed(1), 'contribution');
@@ -1244,7 +1249,7 @@ function parseSpanishDate(dateText) {
           return null;
       }
       
-      console.log(`[TrustShield v1.5.6] Parsed Spanish date: "${dateText}" -> ${result.toISOString()}`);
+      console.log(`[TrustShield v1.6.2] Parsed Spanish date: "${dateText}" -> ${result.toISOString()}`);
       return result;
     }
   }
@@ -1302,13 +1307,13 @@ function normalizeNeighborhood(neighborhood) {
     }
   }
   
-  console.log(`[TrustShield v1.5.6] ⚠️ Unknown neighborhood: "${neighborhood}" -> using default`);
+  console.log(`[TrustShield v1.6.2] ⚠️ Unknown neighborhood: "${neighborhood}" -> using default`);
   return null;
 }
 
 // Phase 1 Price Anomaly Detection (40% weight) - Enhanced with Idealista's pre-calculated values
 function checkPriceAnomaly(price, size, neighborhood, pricePerSqm = null) {
-  console.log('[TrustShield v1.5.6] Checking price anomaly:', { price, size, neighborhood, pricePerSqm });
+  console.log('[TrustShield v1.6.2] Checking price anomaly:', { price, size, neighborhood, pricePerSqm });
   
   // Use Idealista's pre-calculated price per m² if available, otherwise calculate our own
   let finalPricePerSqm = pricePerSqm;
@@ -1317,9 +1322,9 @@ function checkPriceAnomaly(price, size, neighborhood, pricePerSqm = null) {
   if (!finalPricePerSqm && price && size && price > 0 && size > 0) {
     finalPricePerSqm = price / size;
     calculationSource = 'calculated';
-    console.log(`[TrustShield v1.5.6] Using calculated price per m²: ${finalPricePerSqm.toFixed(2)} €/m²`);
+    console.log(`[TrustShield v1.6.2] Using calculated price per m²: ${finalPricePerSqm.toFixed(2)} €/m²`);
   } else if (finalPricePerSqm) {
-    console.log(`[TrustShield v1.5.6] Using Idealista's price per m²: ${finalPricePerSqm} €/m²`);
+    console.log(`[TrustShield v1.6.2] Using Idealista's price per m²: ${finalPricePerSqm} €/m²`);
     
     // Validation: if we have both values, check for significant discrepancy
     if (price && size && price > 0 && size > 0) {
@@ -1328,7 +1333,7 @@ function checkPriceAnomaly(price, size, neighborhood, pricePerSqm = null) {
       const discrepancyPercent = (discrepancy / ourCalculation) * 100;
       
       if (discrepancyPercent > 10) {
-        console.warn(`[TrustShield v1.5.6] Price per m² discrepancy detected: Idealista: ${finalPricePerSqm} vs Our calculation: ${ourCalculation.toFixed(2)} (${discrepancyPercent.toFixed(1)}% difference)`);
+        console.warn(`[TrustShield v1.6.2] Price per m² discrepancy detected: Idealista: ${finalPricePerSqm} vs Our calculation: ${ourCalculation.toFixed(2)} (${discrepancyPercent.toFixed(1)}% difference)`);
       }
     }
   }
@@ -1346,12 +1351,30 @@ function checkPriceAnomaly(price, size, neighborhood, pricePerSqm = null) {
     NEIGHBORHOOD_AVG_PRICES[normalizedNeighborhood] : 
     22.1; // Default Barcelona average if unknown (2025 data)
   
-  console.log(`[TrustShield v1.5.6] Neighborhood mapping: "${neighborhood}" -> "${normalizedNeighborhood}" (€${neighborhood_avg}/m²)`);
-  console.log(`[TrustShield v1.5.6] Using ${calculationSource} price per m²: ${finalPricePerSqm.toFixed(2)} €/m²`);
+  console.log(`[TrustShield v1.6.2] Neighborhood mapping: "${neighborhood}" -> "${normalizedNeighborhood}" (€${neighborhood_avg}/m²)`);
+  console.log(`[TrustShield v1.6.2] Using ${calculationSource} price per m²: ${finalPricePerSqm.toFixed(2)} €/m²`);
+  
+  // Debug for price check accuracy
+  console.log(`[TrustShield v1.6.2] 🔍 PRICE DEBUG:`);
+  console.log(`  Original neighborhood: "${neighborhood}"`);
+  console.log(`  Normalized input: "${normalizeSpanishText(neighborhood)}"`);
+  console.log(`  Mapped to district: "${normalizedNeighborhood}"`);
+  console.log(`  District average: €${neighborhood_avg}/m²`);
+  console.log(`  Available mappings for 'gotic':`, Object.keys(NEIGHBORHOOD_MAPPING).filter(k => k.includes('gotic')));
+  
+  if (!normalizedNeighborhood) {
+    console.warn(`[TrustShield v1.6.2] ⚠️ No neighborhood mapping found for "${neighborhood}" - using Barcelona default (€${neighborhood_avg}/m²)`);
+  }
   
   // Calculate percentage difference from neighborhood average
   const percentageDiff = ((finalPricePerSqm - neighborhood_avg) / neighborhood_avg) * 100;
+  // Use the official district name consistently (not the original neighborhood)
   const displayNeighborhood = normalizedNeighborhood || 'Barcelona';
+  
+  console.log(`[TrustShield v1.6.2] 📊 PRICE COMPARISON FINAL:`);
+  console.log(`  Display name: "${displayNeighborhood}"`);
+  console.log(`  Final message will show: "${displayNeighborhood} average"`);
+  console.log(`  All price check messages will use this district name for consistency`);
   
   // Format percentage for display
   const formatPercentage = (percent) => {
@@ -1366,7 +1389,7 @@ function checkPriceAnomaly(price, size, neighborhood, pricePerSqm = null) {
   };
   
   const percentageText = formatPercentage(percentageDiff);
-  const priceComparison = `€${finalPricePerSqm.toFixed(1)}/m² (${percentageText} the ${displayNeighborhood} average of €${neighborhood_avg}/m²)`;
+  const priceComparison = `€${Math.round(finalPricePerSqm)}/m² (${percentageText} the ${displayNeighborhood} average of €${Math.round(neighborhood_avg)}/m²)`;
   
   // Major scam indicator - significantly below market
   if (finalPricePerSqm < neighborhood_avg * 0.4) {
@@ -1404,7 +1427,7 @@ function checkListingQuality(listingData) {
   const photoCount = parseInt(listingData.photoCount) || 0;
   const description = listingData.fullDescription || '';
   
-  console.log('[TrustShield v1.5.6] Quality check:', { 
+  console.log('[TrustShield v1.6.2] Quality check:', { 
     photoCount, 
     photoCountType: typeof listingData.photoCount,
     originalPhotoCount: listingData.photoCount,
@@ -1420,35 +1443,35 @@ function checkListingQuality(listingData) {
   if (photoCount >= 35) {
     qualityScore += 15; // 35 total
     photoMessage = `Exceptional photo coverage with ${photoCount} photos`;
-    console.log('[TrustShield v1.5.6] Photo logic: 35+ photos, score = 35');
+    console.log('[TrustShield v1.6.2] Photo logic: 35+ photos, score = 35');
   } else if (photoCount >= 25) {
     qualityScore += 12; // 32 total
     photoMessage = `Excellent photo coverage with ${photoCount} photos`;
-    console.log('[TrustShield v1.5.6] Photo logic: 25-34 photos, score = 32');
+    console.log('[TrustShield v1.6.2] Photo logic: 25-34 photos, score = 32');
   } else if (photoCount >= 18) {
     qualityScore += 8; // 28 total  
     photoMessage = `Very good photo coverage with ${photoCount} photos`;
-    console.log('[TrustShield v1.5.6] Photo logic: 18-24 photos, score = 28');
+    console.log('[TrustShield v1.6.2] Photo logic: 18-24 photos, score = 28');
   } else if (photoCount >= 12) {
     qualityScore += 4; // 24 total
     photoMessage = `Good photo coverage with ${photoCount} photos`;
-    console.log('[TrustShield v1.5.6] Photo logic: 12-17 photos, score = 24');
+    console.log('[TrustShield v1.6.2] Photo logic: 12-17 photos, score = 24');
   } else if (photoCount >= 6) {
     qualityScore += 0; // 20 total (baseline)
     photoMessage = `Adequate photos (${photoCount} photos) - basic coverage`;
-    console.log('[TrustShield v1.5.6] Photo logic: 6-11 photos, score = 20');
+    console.log('[TrustShield v1.6.2] Photo logic: 6-11 photos, score = 20');
   } else if (photoCount >= 3) {
     qualityScore -= 5; // 15 total
     photoMessage = `Few photos (${photoCount} photos) - consider with caution`;
-    console.log('[TrustShield v1.5.6] Photo logic: 3-5 photos, score = 15');
+    console.log('[TrustShield v1.6.2] Photo logic: 3-5 photos, score = 15');
   } else if (photoCount >= 1) {
     qualityScore -= 10; // 10 total
     photoMessage = `Very few photos (only ${photoCount}) - major concern`;
-    console.log('[TrustShield v1.5.6] Photo logic: 1-2 photos, score = 10');
+    console.log('[TrustShield v1.6.2] Photo logic: 1-2 photos, score = 10');
   } else {
     qualityScore -= 15; // 5 total
     photoMessage = 'No photos available - major red flag';
-    console.log('[TrustShield v1.5.6] Photo logic: 0 photos, score = 5');
+    console.log('[TrustShield v1.6.2] Photo logic: 0 photos, score = 5');
   }
   
   // Floor plan bonus: +5 points
@@ -1469,9 +1492,9 @@ function checkListingQuality(listingData) {
   // Ensure within bounds (0-35) BEFORE logging
   qualityScore = Math.max(0, Math.min(35, qualityScore));
   
-  console.log('[TrustShield v1.5.6] 🔧 FIXED Quality calculation: base=20, photos=' + (photoCount >= 35 ? 15 : photoCount >= 25 ? 12 : photoCount >= 18 ? 8 : photoCount >= 12 ? 4 : photoCount >= 6 ? 0 : photoCount >= 3 ? -5 : photoCount >= 1 ? -10 : -15) + ', floorPlan=' + (listingData.hasFloorPlan ? 5 : 0) + ', description=' + (description.length >= 200 ? 5 : description.length < 50 ? -5 : 0) + ', final=' + qualityScore);
+  console.log('[TrustShield v1.6.2] 🔧 FIXED Quality calculation: base=20, photos=' + (photoCount >= 35 ? 15 : photoCount >= 25 ? 12 : photoCount >= 18 ? 8 : photoCount >= 12 ? 4 : photoCount >= 6 ? 0 : photoCount >= 3 ? -5 : photoCount >= 1 ? -10 : -15) + ', floorPlan=' + (listingData.hasFloorPlan ? 5 : 0) + ', description=' + (description.length >= 200 ? 5 : description.length < 50 ? -5 : 0) + ', final=' + qualityScore);
   
-  console.log('[TrustShield v1.5.6] Quality result:', { qualityScore, photoMessage });
+  console.log('[TrustShield v1.6.2] Quality result:', { qualityScore, photoMessage });
   
   return {
     score: qualityScore,
@@ -1481,7 +1504,7 @@ function checkListingQuality(listingData) {
 
 // Phase 1 Freshness Assessment (10 points max)
 function checkListingFreshness(lastUpdated) {
-  console.log('[TrustShield v1.5.6] Freshness check:', { lastUpdated });
+  console.log('[TrustShield v1.6.2] Freshness check:', { lastUpdated });
   
   let freshnessScore = 10; // Start with full points
   let message = '';
@@ -1502,13 +1525,13 @@ function checkListingFreshness(lastUpdated) {
     
     // Check if both parsing methods failed
     if (isNaN(updateDate.getTime())) {
-      console.log(`[TrustShield v1.5.6] Failed to parse date: "${lastUpdated}" - treating as recent`);
+      console.log(`[TrustShield v1.6.2] Failed to parse date: "${lastUpdated}" - treating as recent`);
       // If we can't parse the date but have update text, assume it's recent
       freshnessScore = 10;
       message = 'Recently updated - likely still available';
     } else {
   const daysDiff = (now - updateDate) / (1000 * 60 * 60 * 24);
-      console.log('[TrustShield v1.5.6] Days since update:', daysDiff);
+      console.log('[TrustShield v1.6.2] Days since update:', daysDiff);
 
       if (daysDiff < 14) {
         freshnessScore = 10; // Full points
@@ -1523,7 +1546,7 @@ function checkListingFreshness(lastUpdated) {
     }
   }
   
-  console.log('[TrustShield v1.5.6] Freshness result:', { freshnessScore, message });
+  console.log('[TrustShield v1.6.2] Freshness result:', { freshnessScore, message });
   
   return { 
     score: freshnessScore,
