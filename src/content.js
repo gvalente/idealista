@@ -218,21 +218,17 @@ import './index.js';
         'strong.price'
       ];
       
-      console.log(`[TrustShield v1.7.0] Extracting price for listing ${listingId}`);
-      
       for (const selector of priceSelectors) {
         const priceEl = document.querySelector(selector);
         if (priceEl) {
           const rawText = priceEl.textContent || '';
-          console.log(`[TrustShield v1.7.0] Found price element with selector '${selector}': "${rawText}"`);
           
           // Handle monthly rent format (e.g., "770 €/month")
           if (rawText.includes('€/month') || rawText.includes('€/mes')) {
             const priceText = rawText.replace(/[^\d]/g, '');
-            if (priceText) {
-              price = parseFloat(priceText);
-              console.log(`[TrustShield v1.7.0] Successfully extracted monthly rent: ${price} €/month`);
-              break;
+          if (priceText) {
+            price = parseFloat(priceText);
+            break;
             }
           }
           // Handle other price formats
@@ -240,7 +236,6 @@ import './index.js';
             const priceText = rawText.replace(/[^\d]/g, '');
             if (priceText) {
               price = parseFloat(priceText);
-              console.log(`[TrustShield v1.7.0] Successfully extracted price: ${price}`);
               break;
             }
           }
@@ -248,7 +243,7 @@ import './index.js';
       }
       
       if (!price) {
-        console.warn(`[TrustShield v1.7.0] No price found with any selector. Available price-related elements:`, 
+        console.warn(`[TrustShield v1.0.0] No price found with any selector. Available price-related elements:`, 
           document.querySelectorAll('[class*="price"], [class*="cost"], [class*="amount"]'));
       }
 
@@ -262,21 +257,17 @@ import './index.js';
         '.price-feature .flex-feature-details'
       ];
       
-      console.log(`[TrustShield v1.7.0] Looking for Idealista's calculated price per m² for listing ${listingId}`);
-      
       // First pass: look for price per m² specifically
       for (const selector of pricePerSqmSelectors) {
         const elements = document.querySelectorAll(selector);
         for (const el of elements) {
           const text = (el.textContent || '').trim();
-          console.log(`[TrustShield v1.7.0] Checking element for price per m²: "${text}"`);
           
           // Look for €/m² pattern in the text content  
           if (text.includes('€/m²') || text.includes('€/m2') || text.includes('eur/m²')) {
             const priceText = text.replace(/[^\d.,]/g, '').replace(',', '.');
             if (priceText) {
               pricePerSqm = parseFloat(priceText);
-              console.log(`[TrustShield v1.7.0] Found Idealista's price per m²: ${pricePerSqm} €/m² from text: "${text}"`);
               break;
             }
           }
@@ -287,24 +278,17 @@ import './index.js';
       // Second pass: look for price per m² in any flex-feature-details elements
       if (!pricePerSqm) {
         const allFlexElements = document.querySelectorAll('.flex-feature-details');
-        console.log(`[TrustShield v1.7.0] Found ${allFlexElements.length} flex-feature-details elements`);
         
         for (const el of allFlexElements) {
           const text = (el.textContent || '').trim();
-          console.log(`[TrustShield v1.7.0] Checking flex element: "${text}"`);
           
           // Look for the specific pattern from screenshots (e.g., "38.50 €/m²")
           const euroPerSqmMatch = text.match(/(\d+(?:\.\d+)?)\s*€\/m²/);
           if (euroPerSqmMatch) {
             pricePerSqm = parseFloat(euroPerSqmMatch[1]);
-            console.log(`[TrustShield v1.7.0] Found Idealista's price per m² via pattern match: ${pricePerSqm} €/m²`);
             break;
           }
         }
-      }
-      
-      if (!pricePerSqm) {
-        console.log(`[TrustShield v1.7.0] No pre-calculated price per m² found, will calculate from price and size`);
       }
 
       // Size from listing details
@@ -340,7 +324,7 @@ import './index.js';
         '.area-name'
       ];
       
-      console.log(`[TrustShield v1.7.0] 🏘️ NEIGHBORHOOD EXTRACTION DEBUG:`);
+      console.log(`[TrustShield v1.0.0] 🏘️ NEIGHBORHOOD EXTRACTION DEBUG:`);
       console.log(`  Looking for neighborhood selectors:`, neighborhoodSelectors);
       
       for (const selector of neighborhoodSelectors) {
@@ -356,20 +340,16 @@ import './index.js';
       // Fallback 1: Extract from page title
       if (!neighborhood) {
         const pageTitle = document.title;
-        console.log(`[TrustShield v1.7.0] 🔄 Fallback 1: Extracting from page title: "${pageTitle}"`);
         
         // Pattern: "Flat / apartment for rent in Calle de..., El Gòtic, Barcelona"
         const titleMatch = pageTitle.match(/,\s*([^,]+),\s*Barcelona/i);
         if (titleMatch && titleMatch[1] && titleMatch[1].trim() !== 'Barcelona') {
           neighborhood = titleMatch[1].trim();
-          console.log(`[TrustShield v1.7.0] ✅ Extracted from title: "${neighborhood}"`);
         }
       }
       
       // Fallback 2: Extract from visible text content
       if (!neighborhood) {
-        console.log(`[TrustShield v1.7.0] 🔄 Fallback 2: Searching all text content...`);
-        
         // Look for Spanish neighborhood patterns in visible text
         const allText = document.body.textContent || '';
         const barcelonaPattern = /,\s*([^,\n]+),\s*Barcelona/gi;
@@ -380,14 +360,13 @@ import './index.js';
               !candidate.includes('€') && !candidate.includes('m²') && 
               !candidate.includes('bed') && !candidate.includes('bath')) {
             neighborhood = candidate;
-            console.log(`[TrustShield v1.7.0] ✅ Extracted from content: "${neighborhood}"`);
             break;
           }
         }
       }
       
       if (!neighborhood) {
-        console.warn(`[TrustShield v1.7.0] ⚠️ All neighborhood extraction strategies failed!`);
+        console.warn(`[TrustShield v1.0.0] ⚠️ All neighborhood extraction strategies failed!`);
         console.warn(`  Available title elements:`, 
           document.querySelectorAll('[class*="title"], [class*="info"], [class*="address"], [class*="location"]'));
         console.warn(`  Page title:`, document.title);
@@ -465,7 +444,7 @@ import './index.js';
         }
       }
 
-      console.log(`[TrustShield v1.7.0] Extracted listing page data for ${listingId}:`, {
+      console.log(`[TrustShield v1.0.0] Extracted listing page data for ${listingId}:`, {
         price, size, neighborhood, photoCount, hasFloorPlan, 
         descriptionLength: fullDescription.length, lastUpdated, pricePerSqm
       });
@@ -486,7 +465,7 @@ import './index.js';
         pricePerSqm: pricePerSqm
       };
     } catch (error) {
-      console.error('[TrustShield v1.7.0] Error extracting current listing data:', error);
+      console.error('[TrustShield v1.0.0] Error extracting current listing data:', error);
       return null;
     }
   }
@@ -518,13 +497,7 @@ import './index.js';
           return;
         }
         
-        console.log('[TrustShield v1.7.0] 📨 RECEIVED RESPONSE FROM SERVICE WORKER:', {
-          success: response?.success,
-          score: response?.data?.score,
-          breakdown: response?.data?.breakdown?.length,
-          listingId: listingData.id,
-          dataSource: response?.data?._debug?.dataSource
-        });
+
         
         callback(response);
       });
@@ -538,7 +511,7 @@ import './index.js';
   function createRootContainer(targetElement, listingId) {
     try {
       if (!targetElement || !listingId) {
-        console.error('[TrustShield v1.7.0] Invalid parameters for createRootContainer:', { targetElement, listingId });
+        console.error('[TrustShield v1.0.0] Invalid parameters for createRootContainer:', { targetElement, listingId });
         return null;
       }
       
@@ -561,7 +534,7 @@ import './index.js';
     // Create new container
       const container = document.createElement('div');
       if (!container) {
-        console.error('[TrustShield v1.7.0] Failed to create DOM element');
+        console.error('[TrustShield v1.0.0] Failed to create DOM element');
         return null;
       }
       
@@ -582,7 +555,7 @@ import './index.js';
     
     return container;
     } catch (error) {
-      console.error('[TrustShield v1.7.0] Error creating root container:', error);
+      console.error('[TrustShield v1.0.0] Error creating root container:', error);
       return null;
     }
   }
@@ -600,7 +573,7 @@ import './index.js';
         // Remove from tracking
         activeContainers.delete(containerId);
         
-        console.log(`[TrustShield v1.7.0] Cleaned up container for listing ${containerInfo.listingId}`);
+        console.log(`[TrustShield v1.0.0] Cleaned up container for listing ${containerInfo.listingId}`);
       }
       
       // Also check DOM directly
@@ -609,7 +582,7 @@ import './index.js';
         domContainer.parentNode.removeChild(domContainer);
       }
     } catch (error) {
-      console.warn(`[TrustShield v1.7.0] Error cleaning up container ${containerId}:`, error);
+      console.warn(`[TrustShield v1.0.0] Error cleaning up container ${containerId}:`, error);
     }
   }
 
@@ -618,7 +591,7 @@ import './index.js';
     try {
       // Check if we already injected a badge
       if (mainImage.querySelector('.trustshield-image-badge')) {
-        console.log('[TrustShield v1.7.0] Badge already exists in image gallery');
+        console.log('[TrustShield v1.0.0] Badge already exists in image gallery');
         return;
       }
 
@@ -634,12 +607,10 @@ import './index.js';
         margin: 0 !important;
       `;
       
-              // Style the container with responsive sizing (larger on desktop) - DUAL CONTAINER APPROACH
+                      // Style the container with responsive sizing
         const applyResponsiveBadgeSizing = () => {
           const width = window.innerWidth;
           let height, minWidth, padding, borderRadius, fontSize, iconSize;
-          
-          console.log(`[TrustShield v1.7.0] 🔍 Responsive sizing: window width = ${width}px`);
           
           if (width >= 1200) {
             // Desktop: 64px badge
@@ -649,7 +620,6 @@ import './index.js';
             borderRadius = '32px';
             fontSize = '24px';
             iconSize = '28px';
-            console.log(`[TrustShield v1.7.0] 📱 Desktop breakpoint: ${height} height, ${iconSize} icon`);
           } else if (width >= 768) {
             // Tablet: 48px badge
             height = '48px';
@@ -658,7 +628,6 @@ import './index.js';
             borderRadius = '24px';
             fontSize = '20px';
             iconSize = '22px';
-            console.log(`[TrustShield v1.7.0] 📱 Tablet breakpoint: ${height} height, ${iconSize} icon`);
           } else {
             // Mobile: 36px badge
             height = '36px';
@@ -667,7 +636,6 @@ import './index.js';
             borderRadius = '18px';
             fontSize = '16px';
             iconSize = '18px';
-            console.log(`[TrustShield v1.7.0] 📱 Mobile breakpoint: ${height} height, ${iconSize} icon`);
           }
           
           // Style the OUTER container (transparent, handles sizing)
@@ -692,20 +660,15 @@ import './index.js';
             box-shadow: none !important;
           `;
           
-          console.log(`[TrustShield v1.7.0] 🎨 Applied OUTER container styles: height=${height}, min-width=${minWidth}, padding=${padding}, background=transparent`);
-          
           // Style the INNER container (the actual pill with background and box-shadow)
           const styleInnerPill = () => {
             const innerPill = container.querySelector('.trust-shield-root');
-            console.log(`[TrustShield v1.7.0] 🔍 Looking for .trust-shield-root:`, innerPill);
             
             if (innerPill) {
               // Calculate the actual available height for the inner pill
               const containerHeight = parseInt(height);
               const containerPadding = parseInt(padding.split(' ')[0]) * 2; // Top + bottom padding
               const availableHeight = containerHeight - containerPadding;
-              
-              console.log(`[TrustShield v1.7.0] 📏 Container height: ${containerHeight}px, Padding: ${containerPadding}px, Available: ${availableHeight}px`);
               
               innerPill.style.cssText = `
                 display: flex !important;
@@ -723,29 +686,20 @@ import './index.js';
                 box-shadow: rgba(0, 0, 0, 0.4) 0px 4px 12px !important;
               `;
               
-              console.log(`[TrustShield v1.7.0] 🎨 Applied INNER pill styles: height=${availableHeight}px, padding=8px 12px, background=rgb(193, 123, 107), box-shadow=rgba(0, 0, 0, 0.4) 0px 4px 12px`);
-              
               // Update icon size
               const icon = innerPill.querySelector('svg');
               if (icon) {
                 icon.style.width = iconSize;
                 icon.style.height = iconSize;
-                console.log(`[TrustShield v1.7.0] 🎯 Updated icon size to: ${iconSize}`);
-              } else {
-                console.log(`[TrustShield v1.7.0] ⚠️ No SVG icon found in inner pill`);
               }
               return true; // Successfully styled
             } else {
-              console.log(`[TrustShield v1.7.0] ⚠️ .trust-shield-root element not found in container`);
-              console.log(`[TrustShield v1.7.0] 🔍 Container children:`, container.children);
               return false; // Element not found
             }
           };
           
           // Try to style immediately, if it fails, use MutationObserver to wait for the element
           if (!styleInnerPill()) {
-            console.log(`[TrustShield v1.7.0] 🔍 Setting up MutationObserver to watch for .trust-shield-root...`);
-            
             // Create a MutationObserver to watch for when the .trust-shield-root element appears
             const observer = new MutationObserver((mutations) => {
               for (const mutation of mutations) {
@@ -755,13 +709,8 @@ import './index.js';
                       // Check if this node or any of its descendants is .trust-shield-root
                       const trustShieldRoot = node.classList?.contains('trust-shield-root') ? node : node.querySelector('.trust-shield-root');
                       if (trustShieldRoot) {
-                        console.log(`[TrustShield v1.7.0] 🎯 Found .trust-shield-root via MutationObserver!`);
                         observer.disconnect(); // Stop observing
-                        
-                        // Now style the element
-                        if (styleInnerPill()) {
-                          console.log(`[TrustShield v1.7.0] ✅ Inner pill styling successful via MutationObserver`);
-                        }
+                        styleInnerPill();
                         return;
                       }
                     }
@@ -773,12 +722,11 @@ import './index.js';
             // Start observing the container for changes
             observer.observe(container, { childList: true, subtree: true });
             
-            // Also try a few more times with increasing delays as fallback
+            // Fallback retries
             setTimeout(() => styleInnerPill(), 200);
             setTimeout(() => styleInnerPill(), 500);
             setTimeout(() => {
               if (!styleInnerPill()) {
-                console.log(`[TrustShield v1.7.0] ❌ Inner pill styling failed after all attempts`);
                 observer.disconnect();
               }
             }, 1000);
@@ -801,9 +749,9 @@ import './index.js';
       badgeWrapper.appendChild(container);
       mainImage.appendChild(badgeWrapper);
       
-      console.log('[TrustShield v1.7.0] Successfully injected badge into image gallery top-right corner');
+      console.log('[TrustShield v1.0.0] Successfully injected badge into image gallery top-right corner');
     } catch (error) {
-      console.error('[TrustShield v1.7.0] Error injecting into image gallery:', error);
+      console.error('[TrustShield v1.0.0] Error injecting into image gallery:', error);
     }
   }
 
@@ -811,7 +759,7 @@ import './index.js';
     try {
       // Check if we already modified this header
       if (headerTitle.classList.contains('trustshield-header-modified')) {
-        console.log('[TrustShield v1.7.0] Header already modified, finding existing wrapper');
+        console.log('[TrustShield v1.0.0] Header already modified, finding existing wrapper');
         const existingWrapper = headerTitle.querySelector('.trustshield-header-wrapper');
         if (existingWrapper) {
           const shieldWrapper = existingWrapper.querySelector('.trustshield-header-shield');
@@ -1030,10 +978,10 @@ import './index.js';
       // Mark header as modified
       headerTitle.classList.add('trustshield-header-modified');
       
-      console.log('[TrustShield v1.7.0] ✅ Successfully injected Trust Shield into listing header');
+      console.log('[TrustShield v1.0.0] ✅ Successfully injected Trust Shield into listing header');
       
     } catch (error) {
-      console.error('[TrustShield v1.7.0] Error injecting into header:', error);
+      console.error('[TrustShield v1.0.0] Error injecting into header:', error);
       throw error; // Re-throw to trigger fallback
     }
   }
@@ -1042,12 +990,12 @@ import './index.js';
   function injectContainer(container, listingData, pageType, componentVariant) {
     try {
       if (!container) {
-        console.error('[TrustShield v1.7.0] Container is null/undefined, cannot inject');
+        console.error('[TrustShield v1.0.0] Container is null/undefined, cannot inject');
         return;
       }
       
       if (!listingData || !listingData.element) {
-        console.error('[TrustShield v1.7.0] Invalid listing data or element, cannot inject container');
+        console.error('[TrustShield v1.0.0] Invalid listing data or element, cannot inject container');
         return;
       }
       
@@ -1078,14 +1026,14 @@ import './index.js';
       } else if (pageType === 'listing' && componentVariant === 'badge') {
         // For listing pages, inject badge into image gallery (safer DOM placement)
         const mainImage = document.querySelector('.main-image');
-        console.log('[TrustShield v1.7.0] Looking for .main-image:', mainImage);
+        console.log('[TrustShield v1.0.0] Looking for .main-image:', mainImage);
         if (mainImage) {
-          console.log('[TrustShield v1.7.0] Found main image gallery, injecting badge in top-right corner');
+          console.log('[TrustShield v1.0.0] Found main image gallery, injecting badge in top-right corner');
           injectIntoImageGallery(mainImage, container);
           return;
         } else {
-          console.warn('[TrustShield v1.7.0] Could not find .main-image for gallery injection, using fallback');
-          console.log('[TrustShield v1.7.0] Available title selectors:', 
+          console.warn('[TrustShield v1.0.0] Could not find .main-image for gallery injection, using fallback');
+          console.log('[TrustShield v1.0.0] Available title selectors:', 
             document.querySelectorAll('h1, .title, [class*="title"], [class*="header"]'));
         }
       }
@@ -1094,17 +1042,17 @@ import './index.js';
       if (listingData.element && listingData.element.appendChild) {
         listingData.element.appendChild(container);
         } else {
-        console.error('[TrustShield v1.7.0] Cannot append container - element has no appendChild method');
+        console.error('[TrustShield v1.0.0] Cannot append container - element has no appendChild method');
       }
     } catch (error) {
-      console.error('[TrustShield v1.7.0] Error injecting container:', error);
+      console.error('[TrustShield v1.0.0] Error injecting container:', error);
       // Try fallback injection
       try {
         if (listingData && listingData.element && listingData.element.appendChild && container) {
           listingData.element.appendChild(container);
         }
       } catch (fallbackError) {
-        console.error('[TrustShield v1.7.0] Fallback injection also failed:', fallbackError);
+        console.error('[TrustShield v1.0.0] Fallback injection also failed:', fallbackError);
       }
     }
   }
@@ -1154,8 +1102,8 @@ import './index.js';
 
   // Creates a Shadow DOM–scoped modal with the full score breakdown - matching v0 design exactly
   function openTrustShieldDialog(scoreData) {
-    console.log(`[TrustShield v1.7.0] 🔍 DIALOG DEBUG - Received scoreData:`, scoreData);
-    console.log(`[TrustShield v1.7.0] 🔍 BREAKDOWN DEBUG:`, scoreData?.breakdown?.map(item => ({
+    console.log(`[TrustShield v1.0.0] 🔍 DIALOG DEBUG - Received scoreData:`, scoreData);
+    console.log(`[TrustShield v1.0.0] 🔍 BREAKDOWN DEBUG:`, scoreData?.breakdown?.map(item => ({
       type: item.type,
       points: item.points,
       details: item.details
@@ -1564,17 +1512,17 @@ import './index.js';
   function processListingWithLoadingState(listingData, componentVariant = 'badge', fadeInDelay = 0) {
     // Validate input parameters
     if (!listingData) {
-      console.error('[TrustShield v1.7.0] processListingWithLoadingState called with null/undefined listingData');
+      console.error('[TrustShield v1.0.0] processListingWithLoadingState called with null/undefined listingData');
       return;
     }
     
     if (!listingData.id || typeof listingData.id !== 'string') {
-      console.error('[TrustShield v1.7.0] processListingWithLoadingState called with invalid listing ID:', listingData.id, typeof listingData.id);
+      console.error('[TrustShield v1.0.0] processListingWithLoadingState called with invalid listing ID:', listingData.id, typeof listingData.id);
       return;
     }
     
     if (!listingData.element) {
-      console.error('[TrustShield v1.7.0] processListingWithLoadingState called with missing element:', listingData);
+      console.error('[TrustShield v1.0.0] processListingWithLoadingState called with missing element:', listingData);
       return;
     }
     
@@ -1583,10 +1531,10 @@ import './index.js';
     // Check if we already have a Trust Shield for this listing
     const existingContainer = document.getElementById(`idealista-trust-shield-${listingData.id}-${componentVariant}`);
     if (existingContainer && existingContainer.parentNode) {
-      console.log(`[TrustShield v1.7.0] ⚠️ Trust Shield already exists for ${listingData.id}, skipping duplicate`);
+      console.log(`[TrustShield v1.0.0] ⚠️ Trust Shield already exists for ${listingData.id}, skipping duplicate`);
       return;
     } else if (existingContainer && !existingContainer.parentNode) {
-      console.log(`[TrustShield v1.7.0] 🔧 Found orphaned container for ${listingData.id}, cleaning up and recreating`);
+      console.log(`[TrustShield v1.0.0] 🔧 Found orphaned container for ${listingData.id}, cleaning up and recreating`);
       existingContainer.remove();
     }
     
@@ -1595,7 +1543,7 @@ import './index.js';
       const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
       
       if (!container) {
-        console.error('[TrustShield v1.7.0] Failed to create container for listing:', listingData.id);
+        console.error('[TrustShield v1.0.0] Failed to create container for listing:', listingData.id);
         return;
       }
       
@@ -1619,7 +1567,7 @@ import './index.js';
       calculateScoreWithTransition(container, listingData, componentVariant);
       
     } catch (error) {
-      console.error('[TrustShield v1.7.0] Error in processListingWithLoadingState:', error);
+      console.error('[TrustShield v1.0.0] Error in processListingWithLoadingState:', error);
       // Fallback to regular processing
       processListing(listingData, componentVariant);
     }
@@ -1642,7 +1590,7 @@ import './index.js';
       }
     }, function(response) {
       if (response && response.success) {
-        console.log('[TrustShield v1.7.0] 📨 Score calculated, transitioning from loading state:', {
+        console.log('[TrustShield v1.0.0] 📨 Score calculated, transitioning from loading state:', {
           score: response.data?.score,
           listingId: listingData.id
         });
@@ -1650,7 +1598,7 @@ import './index.js';
         // Smooth transition from loading to final score
         renderComponent(container, listingData, response, false, componentVariant);
       } else {
-        console.error('[TrustShield v1.7.0] Score calculation failed for listing:', listingData.id, response?.error);
+        console.error('[TrustShield v1.0.0] Score calculation failed for listing:', listingData.id, response?.error);
         // Keep the loading state or show error state
       }
     });
@@ -1660,17 +1608,17 @@ import './index.js';
   function processListing(listingData, componentVariant = 'collapsed') {
     // Validate input parameters
     if (!listingData) {
-      console.error('[TrustShield v1.7.0] processListing called with null/undefined listingData');
+      console.error('[TrustShield v1.0.0] processListing called with null/undefined listingData');
       return;
     }
     
     if (!listingData.id || typeof listingData.id !== 'string') {
-      console.error('[TrustShield v1.7.0] processListing called with invalid listing ID:', listingData.id, typeof listingData.id);
+      console.error('[TrustShield v1.0.0] processListing called with invalid listing ID:', listingData.id, typeof listingData.id);
       return;
     }
     
     if (!listingData.element) {
-      console.error('[TrustShield v1.7.0] processListing called with missing element:', listingData);
+      console.error('[TrustShield v1.0.0] processListing called with missing element:', listingData);
       return;
     }
     
@@ -1691,7 +1639,7 @@ import './index.js';
       const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
       
       if (!container) {
-        console.error('[TrustShield v1.7.0] Failed to create container for listing:', listingData.id);
+        console.error('[TrustShield v1.0.0] Failed to create container for listing:', listingData.id);
         return;
       }
       
@@ -1716,7 +1664,7 @@ import './index.js';
     const listingElements = document.querySelectorAll('article.item[data-element-id]');
     const currentListings = new Map();
     
-    console.log(`[TrustShield v1.7.0] 🔍 Processing ${listingElements.length} listings on search page`);
+    console.log(`[TrustShield v1.0.0] 🔍 Processing ${listingElements.length} listings on search page`);
     
     // Build current listings map
     for (let i = 0; i < listingElements.length; i++) {
@@ -1732,7 +1680,7 @@ import './index.js';
     
     // Handle removed listings
     if (changes.removed.length > 0) {
-      console.log(`[TrustShield v1.7.0] 🗑️ Removing Trust Shields for ${changes.removed.length} listings:`, changes.removed);
+      console.log(`[TrustShield v1.0.0] 🗑️ Removing Trust Shields for ${changes.removed.length} listings:`, changes.removed);
       changes.removed.forEach(listingId => {
         cleanupListingTrustShield(listingId);
       });
@@ -1740,7 +1688,7 @@ import './index.js';
     
     // Handle new listings with immediate loading state + smooth transitions
     if (changes.added.length > 0) {
-      console.log(`[TrustShield v1.7.0] ➕ Adding Trust Shields for ${changes.added.length} new listings with loading states:`, changes.added);
+      console.log(`[TrustShield v1.0.0] ➕ Adding Trust Shields for ${changes.added.length} new listings with loading states:`, changes.added);
       changes.added.forEach((listingId, index) => {
         const element = currentListings.get(listingId);
         if (element) {
@@ -1761,13 +1709,13 @@ import './index.js';
     // Special case: If we have very few persistent listings and many new ones, 
     // it might be a complete page refresh (like after filters)
     if (changes.persistent.length < 3 && changes.added.length > 5) {
-      console.log(`[TrustShield v1.7.0] 🔄 Detected potential page refresh (${changes.persistent.length} persistent, ${changes.added.length} new) - forcing full reprocess`);
+      console.log(`[TrustShield v1.0.0] 🔄 Detected potential page refresh (${changes.persistent.length} persistent, ${changes.added.length} new) - forcing full reprocess`);
       // Force process all listings to ensure Trust Shields appear
       currentListings.forEach((element, listingId) => {
         // Check if this listing already has a Trust Shield
         const existingContainer = document.getElementById(ROOT_CONTAINER_ID + '-' + listingId + '-badge');
         if (!existingContainer) {
-          console.log(`[TrustShield v1.7.0] 🔧 Force processing listing ${listingId}`);
+          console.log(`[TrustShield v1.0.0] 🔧 Force processing listing ${listingId}`);
           processNewListing(element, listingId);
         }
       });
@@ -1775,13 +1723,13 @@ import './index.js';
     
     // Handle persistent listings (no change needed but update tracking)
     if (changes.persistent.length > 0) {
-      console.log(`[TrustShield v1.7.0] ✅ ${changes.persistent.length} listings remain unchanged`);
+      console.log(`[TrustShield v1.0.0] ✅ ${changes.persistent.length} listings remain unchanged`);
     }
     
     // Update our known state
     lastKnownListings = new Map(currentListings);
     
-    console.log(`[TrustShield v1.7.0] 📊 Search page state: ${changes.persistent.length} persistent, ${changes.added.length} added, ${changes.removed.length} removed`);
+    console.log(`[TrustShield v1.0.0] 📊 Search page state: ${changes.persistent.length} persistent, ${changes.added.length} added, ${changes.removed.length} removed`);
   }
   
   // Morphdom-inspired change detection
@@ -1828,9 +1776,9 @@ import './index.js';
       processedListings.delete(badgeKey);
       processedListings.delete(collapsedKey);
       
-      console.log(`[TrustShield v1.7.0] 🧹 Cleaned up Trust Shield for listing ${listingId}`);
+      console.log(`[TrustShield v1.0.0] 🧹 Cleaned up Trust Shield for listing ${listingId}`);
     } catch (error) {
-      console.warn(`[TrustShield v1.7.0] Error cleaning up listing ${listingId}:`, error);
+      console.warn(`[TrustShield v1.0.0] Error cleaning up listing ${listingId}:`, error);
     }
   }
   
@@ -1860,7 +1808,7 @@ import './index.js';
         });
       }
     } catch (error) {
-      console.warn(`[TrustShield v1.7.0] Error processing new listing ${listingId}:`, error);
+      console.warn(`[TrustShield v1.0.0] Error processing new listing ${listingId}:`, error);
     }
   }
 
@@ -1884,7 +1832,7 @@ import './index.js';
     searchResultsContainer = document.querySelector('.items-container.items-list, section.items-container, main.listing-items');
     
     if (pageType === 'search' && searchResultsContainer) {
-      console.log(`[TrustShield v1.7.0] 👀 Monitoring search results container for changes`);
+      console.log(`[TrustShield v1.0.0] 👀 Monitoring search results container for changes`);
       
       // Enhanced MutationObserver with targeted observation
     mutationObserver = new MutationObserver(function(mutations) {
@@ -1924,7 +1872,7 @@ import './index.js';
                 node.classList.contains('listing-items') ||
                 node.id === 'searchResults'
               )) {
-                console.log(`[TrustShield v1.7.0] 🔄 Search container updated via mutation, forcing reprocess`);
+                console.log(`[TrustShield v1.0.0] 🔄 Search container updated via mutation, forcing reprocess`);
                 shouldReprocess = true;
                 significantChanges = true;
                 
@@ -1966,7 +1914,7 @@ import './index.js';
       
       if (shouldReprocess && pageType === 'search') {
           if (significantChanges) {
-            console.log(`[TrustShield v1.7.0] 🔄 Significant DOM changes detected, reprocessing search results`);
+            console.log(`[TrustShield v1.0.0] 🔄 Significant DOM changes detected, reprocessing search results`);
           }
           
           // Enhanced debouncing with requestIdleCallback for better performance
@@ -2037,7 +1985,7 @@ import './index.js';
     urlChangeObserver = new MutationObserver(() => {
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.7.0] 🔗 URL changed from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] 🔗 URL changed from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -2053,7 +2001,7 @@ import './index.js';
     window.addEventListener('popstate', function(event) {
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.7.0] 🔙 Browser navigation from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] 🔙 Browser navigation from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -2067,7 +2015,7 @@ import './index.js';
       originalPushState.apply(history, args);
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.7.0] ⏭️ pushState navigation from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] ⏭️ pushState navigation from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -2077,7 +2025,7 @@ import './index.js';
       originalReplaceState.apply(history, args);
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.7.0] 🔄 replaceState navigation from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] 🔄 replaceState navigation from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -2092,7 +2040,7 @@ import './index.js';
       
       // If we're staying on the same page type but URL changed, it's likely a filter change
       if (oldPageType === 'search' && newPageType === 'search') {
-        console.log(`[TrustShield v1.7.0] 🔍 Filter/search change detected, refreshing listings`);
+        console.log(`[TrustShield v1.0.0] 🔍 Filter/search change detected, refreshing listings`);
         
         // Clear processed listings for this URL context immediately
         clearProcessedListingsForUrl(oldUrl);
@@ -2103,20 +2051,20 @@ import './index.js';
         // Give the page a moment to update the DOM, then force reprocessing
         const scheduleRefresh = window.requestIdleCallback || ((fn) => setTimeout(fn, 300));
         scheduleRefresh(() => {
-          console.log(`[TrustShield v1.7.0] 🔄 Processing search page after filter change`);
+          console.log(`[TrustShield v1.0.0] 🔄 Processing search page after filter change`);
           
           // First check if our dynamic monitoring already handled it
           const currentListingCount = document.querySelectorAll('article.item[data-element-id]').length;
           const processedCount = processedListings.size;
           
-          console.log(`[TrustShield v1.7.0] 📊 Current listings: ${currentListingCount}, Processed: ${processedCount}`);
+          console.log(`[TrustShield v1.0.0] 📊 Current listings: ${currentListingCount}, Processed: ${processedCount}`);
           
           // Only do full reprocessing if the dynamic monitoring missed some
           if (processedCount < currentListingCount * 0.8) { // If less than 80% processed
-            console.log(`[TrustShield v1.7.0] 🔄 Dynamic monitoring missed some listings, doing full reprocess`);
+            console.log(`[TrustShield v1.0.0] 🔄 Dynamic monitoring missed some listings, doing full reprocess`);
             processSearchPageListings();
           } else {
-            console.log(`[TrustShield v1.7.0] ✅ Dynamic monitoring handled most listings, skipping duplicate processing`);
+            console.log(`[TrustShield v1.0.0] ✅ Dynamic monitoring handled most listings, skipping duplicate processing`);
           }
           
           // Final verification check (only if needed)
@@ -2137,7 +2085,7 @@ import './index.js';
                 } else {
                   // Verify the shield is actually attached and visible
                   if (!shieldContainer.parentNode || !document.body.contains(shieldContainer)) {
-                    console.log(`[TrustShield v1.7.0] 🔧 Found detached shield for ${listingId}, treating as missing`);
+                    console.log(`[TrustShield v1.0.0] 🔧 Found detached shield for ${listingId}, treating as missing`);
                     missingShields.push(element);
                   }
                 }
@@ -2145,13 +2093,13 @@ import './index.js';
             }
             
             if (missingShields.length > 0) {
-              console.log(`[TrustShield v1.7.0] 🔍 Final verification: ${missingShields.length} missing shields, adding them`);
+              console.log(`[TrustShield v1.0.0] 🔍 Final verification: ${missingShields.length} missing shields, adding them`);
               
               missingShields.forEach((element, index) => {
                 const listingData = extractListingData(element);
                 if (listingData) {
                   const listingKey = listingData.id + ':' + listingData.url + ':badge';
-                  console.log(`[TrustShield v1.7.0] 🔧 Processing missing shield for listing ${listingData.id}, processed key: ${listingKey}`);
+                  console.log(`[TrustShield v1.0.0] 🔧 Processing missing shield for listing ${listingData.id}, processed key: ${listingKey}`);
                   
                   if (!processedListings.has(listingKey)) {
                     processedListings.add(listingKey);
@@ -2159,29 +2107,29 @@ import './index.js';
                     try {
                       // Use fallback to regular processListing if loading state fails
                       processListingWithLoadingState(listingData, 'badge', 0);
-                      console.log(`[TrustShield v1.7.0] ✅ Successfully initiated shield for ${listingData.id}`);
+                      console.log(`[TrustShield v1.0.0] ✅ Successfully initiated shield for ${listingData.id}`);
                     } catch (error) {
-                      console.error(`[TrustShield v1.7.0] ❌ Loading state failed for ${listingData.id}, trying regular processing:`, error);
+                      console.error(`[TrustShield v1.0.0] ❌ Loading state failed for ${listingData.id}, trying regular processing:`, error);
                       try {
                         processListing(listingData, 'badge');
-                        console.log(`[TrustShield v1.7.0] ✅ Fallback processing succeeded for ${listingData.id}`);
+                        console.log(`[TrustShield v1.0.0] ✅ Fallback processing succeeded for ${listingData.id}`);
                       } catch (fallbackError) {
-                        console.error(`[TrustShield v1.7.0] ❌ Both methods failed for ${listingData.id}:`, fallbackError);
+                        console.error(`[TrustShield v1.0.0] ❌ Both methods failed for ${listingData.id}:`, fallbackError);
                       }
                     }
                   } else {
-                    console.log(`[TrustShield v1.7.0] ⚠️ Listing ${listingData.id} already in processed set but DOM shield missing`);
+                    console.log(`[TrustShield v1.0.0] ⚠️ Listing ${listingData.id} already in processed set but DOM shield missing`);
                     
                     // Force reprocessing if processed but DOM element missing
                     try {
                       processListingWithLoadingState(listingData, 'badge', 0);
-                      console.log(`[TrustShield v1.7.0] ✅ Force reprocessed ${listingData.id}`);
+                      console.log(`[TrustShield v1.0.0] ✅ Force reprocessed ${listingData.id}`);
                     } catch (error) {
-                      console.error(`[TrustShield v1.7.0] ❌ Force reprocessing failed for ${listingData.id}:`, error);
+                      console.error(`[TrustShield v1.0.0] ❌ Force reprocessing failed for ${listingData.id}:`, error);
                     }
                   }
                 } else {
-                  console.error(`[TrustShield v1.7.0] ❌ Failed to extract listing data for element:`, element);
+                  console.error(`[TrustShield v1.0.0] ❌ Failed to extract listing data for element:`, element);
                 }
               });
               
@@ -2196,36 +2144,36 @@ import './index.js';
                 
                 if (stillMissing.length > 0) {
                   const stillMissingIds = stillMissing.map(el => el.getAttribute('data-element-id'));
-                  console.warn(`[TrustShield v1.7.0] ⚠️ ${stillMissing.length} shields still missing after processing:`, stillMissingIds);
+                  console.warn(`[TrustShield v1.0.0] ⚠️ ${stillMissing.length} shields still missing after processing:`, stillMissingIds);
                   
                   // Last resort: try one more time with regular processing
                   stillMissing.forEach(element => {
                     const listingData = extractListingData(element);
                     if (listingData) {
-                      console.log(`[TrustShield v1.7.0] 🆘 Last resort processing for ${listingData.id}`);
+                      console.log(`[TrustShield v1.0.0] 🆘 Last resort processing for ${listingData.id}`);
                       try {
                         processListing(listingData, 'badge');
                       } catch (error) {
-                        console.error(`[TrustShield v1.7.0] ❌ Last resort failed for ${listingData.id}:`, error);
+                        console.error(`[TrustShield v1.0.0] ❌ Last resort failed for ${listingData.id}:`, error);
                       }
                     }
                   });
                 } else {
-                  console.log(`[TrustShield v1.7.0] ✅ All missing shields successfully added`);
+                  console.log(`[TrustShield v1.0.0] ✅ All missing shields successfully added`);
                 }
               }, 800);
             } else {
-              console.log(`[TrustShield v1.7.0] ✅ All listings have Trust Shields`);
+              console.log(`[TrustShield v1.0.0] ✅ All listings have Trust Shields`);
             }
           }, 1000); // Reduced from 1500ms to 1000ms
         });
       } else if (oldPageType !== newPageType) {
         // Page type changed, reinitialize completely
-        console.log(`[TrustShield v1.7.0] 📄 Page type changed from ${oldPageType} to ${newPageType}, reinitializing`);
+        console.log(`[TrustShield v1.0.0] 📄 Page type changed from ${oldPageType} to ${newPageType}, reinitializing`);
         handleNavigation();
       }
     } catch (error) {
-      console.warn(`[TrustShield v1.7.0] Error handling URL change:`, error);
+      console.warn(`[TrustShield v1.0.0] Error handling URL change:`, error);
     }
   }
   
@@ -2238,13 +2186,13 @@ import './index.js';
       }
     }
     keysToRemove.forEach(key => processedListings.delete(key));
-    console.log(`[TrustShield v1.7.0] 🧹 Cleared ${keysToRemove.length} processed listings for URL change`);
+    console.log(`[TrustShield v1.0.0] 🧹 Cleared ${keysToRemove.length} processed listings for URL change`);
   }
 
   // Initialize the extension
   function initialize() {
     try {
-      console.log('Idealista Trust Shield content v1.7.0: initialize start - CSP-compliant data handling');
+      console.log('Idealista Trust Shield content v1.0.0: initialize start - CSP-compliant data handling');
       // Detect page type
       pageType = detectPageType();
       
@@ -2253,7 +2201,7 @@ import './index.js';
         return;
       }
       
-              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.7.0)');
+              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.0.0)');
       
       // Process existing content
       if (pageType === 'search' || pageType === 'favorites') {
@@ -2271,9 +2219,9 @@ import './index.js';
       
 
       
-      console.log('Idealista Trust Shield: Initialization complete (v1.7.0)');
+      console.log('Idealista Trust Shield: Initialization complete (v1.0.0)');
     } catch (error) {
-      console.error('Idealista Trust Shield: Initialization failed (v1.7.0):', error);
+      console.error('Idealista Trust Shield: Initialization failed (v1.0.0):', error);
     }
   }
 
@@ -2282,7 +2230,7 @@ import './index.js';
     const newPageType = detectPageType();
     
     if (newPageType !== pageType) {
-      console.log(`[TrustShield v1.7.0] 🧭 Navigation: ${pageType} → ${newPageType}`);
+      console.log(`[TrustShield v1.0.0] 🧭 Navigation: ${pageType} → ${newPageType}`);
       
       // Comprehensive cleanup
       processedListings.clear();
