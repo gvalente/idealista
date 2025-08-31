@@ -1,6 +1,6 @@
 {
   "name": "idealista-trust-shield",
-  "version": "1.0.2",
+  "version": "1.7.0",
   "description": "A Chrome extension that provides real-time trust and quality scoring for Idealista rental listings in Barcelona",
   "scripts": {
     "build": "parcel build src/content.js --dist-dir extension/dist",
