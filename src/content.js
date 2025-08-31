@@ -28,13 +28,19 @@ import './index.js';
     
     if (url.includes('/inmueble/')) {
       return 'listing';
-    } else if (url.includes('/alquiler-viviendas/') || url.includes('/venta-viviendas/') || url.includes('/point/alquiler-viviendas/') || url.includes('/point/venta-viviendas/')) {
+    } else if (url.includes('/alquiler-viviendas/') || url.includes('/point/alquiler-viviendas/')) {
       return 'search';
     } else if (url.includes('/usuario/favoritos/') || url.includes('/user/favorites/')) {
       return 'favorites';
     }
     
     return 'unknown';
+  }
+  
+  // Check if current page is for rental properties (not sale)
+  function isRentalPage() {
+    const url = window.location.href;
+    return url.includes('/alquiler-viviendas/') || url.includes('/point/alquiler-viviendas/');
   }
 
   // Extract listing data from search page elements using UI-FUNCTIONAL-SPEC selectors
@@ -185,13 +191,281 @@ import './index.js';
         return null;
       }
 
+      const listingId = match[1];
+
+      // Extract detailed listing data from the listing page (same as search page)
+      // This ensures consistent scoring between search and listing pages
+      
+      // Price from main price display - enhanced selectors and debugging
+      let price = null;
+      const priceSelectors = [
+        // Primary selectors from screenshots and analysis
+        '.flex-feature-details', // From screenshot: <strong class="flex-feature-details">770 €/month</strong>
+        '.info-data-price .txt-bold',
+        '.info-data-price',
+        '.price-container .price',
+        '.price-container strong',
+        '.price .txt-bold',
+        '.main-info__price',
+        // Additional selectors for rent vs sale
+        '.info-data .info-data-price',
+        '.price-feature .price',
+        '.price-features__container .price',
+        // Generic fallbacks
+        '[class*="price"] .txt-bold',
+        '[class*="price"]',
+        '.price',
+        'strong.price'
+      ];
+      
+      for (const selector of priceSelectors) {
+        const priceEl = document.querySelector(selector);
+        if (priceEl) {
+          const rawText = priceEl.textContent || '';
+          
+          // Handle monthly rent format (e.g., "770 €/month")
+          if (rawText.includes('€/month') || rawText.includes('€/mes')) {
+            const priceText = rawText.replace(/[^\d]/g, '');
+          if (priceText) {
+            price = parseFloat(priceText);
+            break;
+            }
+          }
+          // Handle other price formats
+          else {
+            const priceText = rawText.replace(/[^\d]/g, '');
+            if (priceText) {
+              price = parseFloat(priceText);
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!price) {
+        console.warn(`[TrustShield v1.0.0] No price found with any selector. Available price-related elements:`, 
+          document.querySelectorAll('[class*="price"], [class*="cost"], [class*="amount"]'));
+      }
+
+      // Extract Idealista's pre-calculated price per m² (authoritative source)
+      let pricePerSqm = null;
+      const pricePerSqmSelectors = [
+        '.flex-feature-details', // Primary from screenshots - covers both price and price per m²
+        '.flex-feature.squaredmeterprice .flex-feature-details',
+        '.squaredmeterprice .flex-feature-details',
+        '.price-per-meter .flex-feature-details',
+        '.price-feature .flex-feature-details'
+      ];
+      
+      // First pass: look for price per m² specifically
+      for (const selector of pricePerSqmSelectors) {
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          const text = (el.textContent || '').trim();
+          
+          // Look for €/m² pattern in the text content  
+          if (text.includes('€/m²') || text.includes('€/m2') || text.includes('eur/m²')) {
+            const priceText = text.replace(/[^\d.,]/g, '').replace(',', '.');
+            if (priceText) {
+              pricePerSqm = parseFloat(priceText);
+              break;
+            }
+          }
+        }
+        if (pricePerSqm) break;
+      }
+      
+      // Second pass: look for price per m² in any flex-feature-details elements
+      if (!pricePerSqm) {
+        const allFlexElements = document.querySelectorAll('.flex-feature-details');
+        
+        for (const el of allFlexElements) {
+          const text = (el.textContent || '').trim();
+          
+          // Look for the specific pattern from screenshots (e.g., "38.50 €/m²")
+          const euroPerSqmMatch = text.match(/(\d+(?:\.\d+)?)\s*€\/m²/);
+          if (euroPerSqmMatch) {
+            pricePerSqm = parseFloat(euroPerSqmMatch[1]);
+            break;
+          }
+        }
+      }
+
+      // Size from listing details
+      let size = null;
+      const sizeSelectors = [
+        '.info-features li',
+        '.details-property li',
+        '.main-info__features li'
+      ];
+      for (const selector of sizeSelectors) {
+        const elements = document.querySelectorAll(selector);
+        for (const el of elements) {
+          const text = (el.textContent || '').toLowerCase();
+          if (text.includes('m²') || text.includes('m2')) {
+            size = parseFloat(text.replace(/[^\d]/g, '')) || null;
+            if (size > 0) break;
+          }
+        }
+        if (size > 0) break;
+      }
+
+      // Neighborhood from title area - enhanced with multiple strategies
+      let neighborhood = null;
+      const neighborhoodSelectors = [
+        '.main-info__title-minor',
+        '.main-info__title-block .main-info__title-minor', 
+        '.main-info__title-block',
+        '.detail-info__address',
+        '.detail-location',
+        '.address',
+        '.location',
+        '.neighborhood',
+        '.area-name'
+      ];
+      
+      console.log(`[TrustShield v1.0.0] 🏘️ NEIGHBORHOOD EXTRACTION DEBUG:`);
+      console.log(`  Looking for neighborhood selectors:`, neighborhoodSelectors);
+      
+      for (const selector of neighborhoodSelectors) {
+        const el = document.querySelector(selector);
+        console.log(`  Selector '${selector}':`, el ? `"${el.textContent.trim()}"` : 'NOT FOUND');
+        if (el) {
+          neighborhood = el.textContent.trim();
+          console.log(`  ✅ Extracted neighborhood: "${neighborhood}"`);
+          if (neighborhood) break;
+        }
+      }
+      
+      // Fallback 1: Extract from page title
+      if (!neighborhood) {
+        const pageTitle = document.title;
+        
+        // Pattern: "Flat / apartment for rent in Calle de..., El Gòtic, Barcelona"
+        const titleMatch = pageTitle.match(/,\s*([^,]+),\s*Barcelona/i);
+        if (titleMatch && titleMatch[1] && titleMatch[1].trim() !== 'Barcelona') {
+          neighborhood = titleMatch[1].trim();
+        }
+      }
+      
+      // Fallback 2: Extract from visible text content
+      if (!neighborhood) {
+        // Look for Spanish neighborhood patterns in visible text
+        const allText = document.body.textContent || '';
+        const barcelonaPattern = /,\s*([^,\n]+),\s*Barcelona/gi;
+        let match;
+        while ((match = barcelonaPattern.exec(allText)) !== null) {
+          const candidate = match[1].trim();
+          if (candidate && candidate.length > 2 && candidate.length < 50 && 
+              !candidate.includes('€') && !candidate.includes('m²') && 
+              !candidate.includes('bed') && !candidate.includes('bath')) {
+            neighborhood = candidate;
+            break;
+          }
+        }
+      }
+      
+      if (!neighborhood) {
+        console.warn(`[TrustShield v1.0.0] ⚠️ All neighborhood extraction strategies failed!`);
+        console.warn(`  Available title elements:`, 
+          document.querySelectorAll('[class*="title"], [class*="info"], [class*="address"], [class*="location"]'));
+        console.warn(`  Page title:`, document.title);
+        console.warn(`  URL:`, window.location.href);
+      }
+
+      // Photo count from gallery
+      let photoCount = null;
+      const photoSelectors = [
+        '.multimedia-shortcuts-button[data-button-type="pics"]',
+        '.photos span:last-child',
+        '.multimedia-counter span:last-child'
+      ];
+      for (const selector of photoSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          const text = el.textContent || el.getAttribute('title') || '';
+          photoCount = parseInt(text.replace(/[^\d]/g, ''), 10) || null;
+          if (photoCount > 0) break;
+        }
+      }
+      
+      // Fallback: count actual images
+      if (!photoCount) {
+        const images = document.querySelectorAll('.gallery img, .multimedia img, .detail-media img');
+        if (images.length > 0) {
+          photoCount = images.length;
+        }
+      }
+
+      // Floor plan check
+      const hasFloorPlan = !!(
+        document.querySelector('.multimedia-shortcuts-button[data-button-type="plan"]') ||
+        document.querySelector('.multimedia-shortcuts-button[data-button-type="PLAN"]') ||
+        document.querySelector('.icon-plan') ||
+        document.querySelector('.floor-plan')
+      );
+
+      // Description from listing details
+      let fullDescription = '';
+      const descSelectors = [
+        'div.comment p',
+        'div.comment',
+        '.description',
+        '.property-description',
+        '.listing-description'
+      ];
+      for (const selector of descSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          fullDescription = el.textContent.trim();
+          if (fullDescription) break;
+        }
+      }
+
+      // Last updated (if available) - consistent with search page behavior
+      let lastUpdated = null;
+      const updateSelectors = [
+        '.date-update-text',
+        '.mod-date', 
+        '.last-updated',
+        '.item-reduced-price',
+        '.item-update',
+        'time',
+        '[class*="update"]'
+      ];
+      for (const selector of updateSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+          const updateText = (el.textContent || '').trim();
+          if (updateText) {
+            lastUpdated = updateText;
+            break;
+          }
+        }
+      }
+
+      console.log(`[TrustShield v1.0.0] Extracted listing page data for ${listingId}:`, {
+        price, size, neighborhood, photoCount, hasFloorPlan, 
+        descriptionLength: fullDescription.length, lastUpdated, pricePerSqm
+      });
+
       return {
-        id: match[1],
+        id: listingId,
         url: url,
-        element: document.body
+        element: document.body,
+        // Include all the same data points as search page extraction
+        price: price,
+        size: size,
+        neighborhood: neighborhood,
+        photoCount: photoCount,
+        hasFloorPlan: hasFloorPlan,
+        fullDescription: fullDescription,
+        lastUpdated: lastUpdated,
+        // Idealista's pre-calculated price per m² (authoritative source)
+        pricePerSqm: pricePerSqm
       };
     } catch (error) {
-      console.error('Error extracting current listing data:', error);
+      console.error('[TrustShield v1.0.0] Error extracting current listing data:', error);
       return null;
     }
   }
@@ -211,6 +485,7 @@ import './index.js';
           hasFloorPlan: listingData.hasFloorPlan ?? null,
           fullDescription: listingData.fullDescription ?? null,
           lastUpdated: listingData.lastUpdated ?? null,
+          pricePerSqm: listingData.pricePerSqm ?? null,
           advertiserName: listingData.advertiserName ?? null,
           advertiserType: listingData.advertiserType ?? null,
           contactEmail: listingData.contactEmail ?? null
@@ -222,13 +497,7 @@ import './index.js';
           return;
         }
         
-        console.log('[TrustShield v1.4.5] 📨 RECEIVED RESPONSE FROM SERVICE WORKER:', {
-          success: response?.success,
-          score: response?.data?.score,
-          breakdown: response?.data?.breakdown?.length,
-          listingId: listingData.id,
-          dataSource: response?.data?._debug?.dataSource
-        });
+
         
         callback(response);
       });
@@ -242,7 +511,7 @@ import './index.js';
   function createRootContainer(targetElement, listingId) {
     try {
       if (!targetElement || !listingId) {
-        console.error('[TrustShield v1.4.5] Invalid parameters for createRootContainer:', { targetElement, listingId });
+        console.error('[TrustShield v1.0.0] Invalid parameters for createRootContainer:', { targetElement, listingId });
         return null;
       }
       
@@ -265,7 +534,7 @@ import './index.js';
     // Create new container
       const container = document.createElement('div');
       if (!container) {
-        console.error('[TrustShield v1.4.5] Failed to create DOM element');
+        console.error('[TrustShield v1.0.0] Failed to create DOM element');
         return null;
       }
       
@@ -286,7 +555,7 @@ import './index.js';
     
     return container;
     } catch (error) {
-      console.error('[TrustShield v1.4.5] Error creating root container:', error);
+      console.error('[TrustShield v1.0.0] Error creating root container:', error);
       return null;
     }
   }
@@ -304,7 +573,7 @@ import './index.js';
         // Remove from tracking
         activeContainers.delete(containerId);
         
-        console.log(`[TrustShield v1.4.5] Cleaned up container for listing ${containerInfo.listingId}`);
+        console.log(`[TrustShield v1.0.0] Cleaned up container for listing ${containerInfo.listingId}`);
       }
       
       // Also check DOM directly
@@ -313,7 +582,407 @@ import './index.js';
         domContainer.parentNode.removeChild(domContainer);
       }
     } catch (error) {
-      console.warn(`[TrustShield v1.4.5] Error cleaning up container ${containerId}:`, error);
+      console.warn(`[TrustShield v1.0.0] Error cleaning up container ${containerId}:`, error);
+    }
+  }
+
+  // Create responsive header layout for listing pages
+  function injectIntoImageGallery(mainImage, container) {
+    try {
+      // Check if we already injected a badge
+      if (mainImage.querySelector('.trustshield-image-badge')) {
+        console.log('[TrustShield v1.0.0] Badge already exists in image gallery');
+        return;
+      }
+
+      // Create badge wrapper positioned absolutely in top-right corner
+      const badgeWrapper = document.createElement('div');
+      badgeWrapper.className = 'trustshield-image-badge';
+      badgeWrapper.style.cssText = `
+        position: absolute !important;
+        top: 16px !important;
+        right: 16px !important;
+        z-index: 10 !important;
+        pointer-events: auto !important;
+        margin: 0 !important;
+      `;
+      
+                      // Style the container with responsive sizing
+        const applyResponsiveBadgeSizing = () => {
+          const width = window.innerWidth;
+          let height, minWidth, padding, borderRadius, fontSize, iconSize;
+          
+          if (width >= 1200) {
+            // Desktop: 64px badge
+            height = '64px';
+            minWidth = '120px';
+            padding = '16px 24px';
+            borderRadius = '32px';
+            fontSize = '24px';
+            iconSize = '28px';
+          } else if (width >= 768) {
+            // Tablet: 48px badge
+            height = '48px';
+            minWidth = '88px';
+            padding = '12px 20px';
+            borderRadius = '24px';
+            fontSize = '20px';
+            iconSize = '22px';
+          } else {
+            // Mobile: 36px badge
+            height = '36px';
+            minWidth = '66px';
+            padding = '6px 12px';
+            borderRadius = '18px';
+            fontSize = '16px';
+            iconSize = '18px';
+          }
+          
+          // Style the OUTER container (transparent, handles sizing)
+          container.style.cssText = `
+            height: ${height} !important;
+            min-width: ${minWidth} !important;
+            padding: ${padding} !important;
+            border-radius: ${borderRadius} !important;
+            font-size: ${fontSize} !important;
+            font-weight: 600 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            cursor: pointer !important;
+            user-select: none !important;
+            transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif !important;
+            margin: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            color: white !important;
+            box-shadow: none !important;
+          `;
+          
+          // Style the INNER container (the actual pill with background and box-shadow)
+          const styleInnerPill = () => {
+            const innerPill = container.querySelector('.trust-shield-root');
+            
+            if (innerPill) {
+              // Calculate the actual available height for the inner pill
+              const containerHeight = parseInt(height);
+              const containerPadding = parseInt(padding.split(' ')[0]) * 2; // Top + bottom padding
+              const availableHeight = containerHeight - containerPadding;
+              
+              innerPill.style.cssText = `
+                display: flex !important;
+                align-items: center !important;
+                gap: 6px !important;
+                min-width: calc(100% - ${containerPadding}px) !important;
+                height: ${availableHeight}px !important;
+                padding: 8px 12px !important;
+                background: rgb(193, 123, 107) !important;
+                color: white !important;
+                border: none !important;
+                border-radius: ${parseInt(borderRadius) - 8}px !important;
+                font-size: ${fontSize} !important;
+                font-weight: 600 !important;
+                box-shadow: rgba(0, 0, 0, 0.4) 0px 4px 12px !important;
+              `;
+              
+              // Update icon size
+              const icon = innerPill.querySelector('svg');
+              if (icon) {
+                icon.style.width = iconSize;
+                icon.style.height = iconSize;
+              }
+              return true; // Successfully styled
+            } else {
+              return false; // Element not found
+            }
+          };
+          
+          // Try to style immediately, if it fails, use MutationObserver to wait for the element
+          if (!styleInnerPill()) {
+            // Create a MutationObserver to watch for when the .trust-shield-root element appears
+            const observer = new MutationObserver((mutations) => {
+              for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                  for (const node of mutation.addedNodes) {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                      // Check if this node or any of its descendants is .trust-shield-root
+                      const trustShieldRoot = node.classList?.contains('trust-shield-root') ? node : node.querySelector('.trust-shield-root');
+                      if (trustShieldRoot) {
+                        observer.disconnect(); // Stop observing
+                        styleInnerPill();
+                        return;
+                      }
+                    }
+                  }
+                }
+              }
+            });
+            
+            // Start observing the container for changes
+            observer.observe(container, { childList: true, subtree: true });
+            
+            // Fallback retries
+            setTimeout(() => styleInnerPill(), 200);
+            setTimeout(() => styleInnerPill(), 500);
+            setTimeout(() => {
+              if (!styleInnerPill()) {
+                observer.disconnect();
+              }
+            }, 1000);
+          }
+        };
+      
+      // Apply initial sizing
+      applyResponsiveBadgeSizing();
+      
+      // Listen for window resize
+      window.addEventListener('resize', applyResponsiveBadgeSizing);
+      
+      // Ensure main image has relative positioning
+      const currentPosition = window.getComputedStyle(mainImage).position;
+      if (currentPosition === 'static') {
+        mainImage.style.position = 'relative';
+      }
+      
+      // Add the badge
+      badgeWrapper.appendChild(container);
+      mainImage.appendChild(badgeWrapper);
+      
+      console.log('[TrustShield v1.0.0] Successfully injected badge into image gallery top-right corner');
+    } catch (error) {
+      console.error('[TrustShield v1.0.0] Error injecting into image gallery:', error);
+    }
+  }
+
+  function injectIntoListingHeader(headerTitle, container) {
+    try {
+      // Check if we already modified this header
+      if (headerTitle.classList.contains('trustshield-header-modified')) {
+        console.log('[TrustShield v1.0.0] Header already modified, finding existing wrapper');
+        const existingWrapper = headerTitle.querySelector('.trustshield-header-wrapper');
+        if (existingWrapper) {
+          const shieldWrapper = existingWrapper.querySelector('.trustshield-header-shield');
+          if (shieldWrapper && !shieldWrapper.hasChildNodes()) {
+            shieldWrapper.appendChild(container);
+            return;
+          }
+        }
+      }
+
+      // Create responsive flex container optimized for badge
+      const flexWrapper = document.createElement('div');
+      flexWrapper.className = 'trustshield-header-wrapper';
+      flexWrapper.style.cssText = [
+        'display: flex !important',
+        'align-items: flex-start !important',
+        'justify-content: space-between !important',
+        'gap: 20px !important',
+        'width: 100% !important',
+        'flex-wrap: wrap !important',
+        'position: relative !important'
+      ].join(' ');
+
+      // Create title wrapper (preserve existing content)
+      const titleWrapper = document.createElement('div');
+      titleWrapper.className = 'trustshield-header-title';
+      titleWrapper.style.cssText = [
+        'flex: 1 !important',
+        'min-width: 0 !important',
+        'order: 2 !important'  // Will be 2 on mobile (below shield)
+      ].join(' ');
+
+      // Create shield wrapper
+      const shieldWrapper = document.createElement('div');
+      shieldWrapper.className = 'trustshield-header-shield';
+      shieldWrapper.style.cssText = [
+        'flex-shrink: 0 !important',
+        'order: 1 !important'  // Will be 1 on mobile (above title)
+      ].join(' ');
+
+      // Move all existing header content to title wrapper
+      while (headerTitle.firstChild) {
+        titleWrapper.appendChild(headerTitle.firstChild);
+      }
+
+      // Apply sizing directly to container before Shadow DOM wraps it
+      // This ensures 48px sizing works despite Shadow DOM isolation
+      const applyBadgeSizing = () => {
+        // Apply desktop sizing by default
+        container.style.cssText = `
+          height: 48px !important;
+          min-width: 88px !important;
+          padding: 12px 20px !important;
+          border-radius: 24px !important;
+          font-size: 20px !important;
+          font-weight: 600 !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          cursor: pointer !important;
+          user-select: none !important;
+          transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+          font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif !important;
+          margin: 0 !important;
+          backface-visibility: hidden !important;
+          transform: translateZ(0) !important;
+          will-change: transform, background-color, color !important;
+        `;
+        
+        // Add responsive sizing via media queries
+        const updateForScreenSize = () => {
+          const width = window.innerWidth;
+          if (width >= 768) {
+            // Desktop: 48px
+            container.style.height = '48px';
+            container.style.minWidth = '88px';
+            container.style.padding = '12px 20px';
+            container.style.borderRadius = '24px';
+            container.style.fontSize = '20px';
+          } else if (width >= 480) {
+            // Tablet: 42px
+            container.style.height = '42px';
+            container.style.minWidth = '80px';
+            container.style.padding = '10px 18px';
+            container.style.borderRadius = '21px';
+            container.style.fontSize = '18px';
+        } else {
+            // Mobile: 36px
+            container.style.height = '36px';
+            container.style.minWidth = '72px';
+            container.style.padding = '8px 16px';
+            container.style.borderRadius = '18px';
+            container.style.fontSize = '16px';
+          }
+        };
+        
+        // Apply initial sizing
+        updateForScreenSize();
+        
+        // Listen for window resize to update sizing
+        window.addEventListener('resize', updateForScreenSize);
+      };
+      
+      // Apply sizing immediately
+      applyBadgeSizing();
+      
+      // Add Trust Shield to shield wrapper
+      shieldWrapper.appendChild(container);
+
+      // Assemble the layout
+      flexWrapper.appendChild(titleWrapper);
+      flexWrapper.appendChild(shieldWrapper);
+      headerTitle.appendChild(flexWrapper);
+
+      // Add responsive styles via a style element
+      const styleId = 'trustshield-header-styles';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          /* Desktop: Trust Shield badge on the right, inline with title */
+          @media (min-width: 768px) {
+            .trustshield-header-wrapper {
+              flex-wrap: nowrap !important;
+              align-items: center !important; /* Center align for inline layout */
+            }
+            .trustshield-header-title {
+              order: 1 !important;
+            }
+            .trustshield-header-shield {
+              order: 2 !important;
+              margin-left: auto !important; /* Push to the right */
+            }
+            /* Scale badge to 48px height on desktop */
+            .trustshield-header-shield > div {
+              height: 48px !important;
+              min-width: 88px !important;
+              padding: 12px 20px !important;
+              border-radius: 24px !important;
+              font-size: 20px !important;
+              font-weight: 600 !important;
+            }
+            .trustshield-header-shield svg {
+              width: 22px !important;
+              height: 22px !important;
+            }
+          }
+          
+          /* Tablet: Medium size */
+          @media (min-width: 480px) and (max-width: 767px) {
+            .trustshield-header-wrapper {
+              flex-direction: column !important;
+              align-items: stretch !important;
+              gap: 12px !important;
+            }
+            .trustshield-header-title {
+              order: 2 !important;
+            }
+            .trustshield-header-shield {
+              order: 1 !important;
+              align-self: flex-start !important;
+            }
+            /* Medium badge size for tablet */
+            .trustshield-header-shield > div {
+              height: 42px !important;
+              min-width: 80px !important;
+              padding: 10px 18px !important;
+              border-radius: 21px !important;
+              font-size: 18px !important;
+            }
+            .trustshield-header-shield svg {
+              width: 20px !important;
+              height: 20px !important;
+            }
+          }
+          
+          /* Mobile: Trust Shield badge above title */
+          @media (max-width: 479px) {
+            .trustshield-header-wrapper {
+              flex-direction: column !important;
+              align-items: stretch !important;
+              gap: 12px !important;
+            }
+            .trustshield-header-title {
+              order: 2 !important;
+            }
+            .trustshield-header-shield {
+              order: 1 !important;
+              align-self: flex-start !important;
+            }
+            /* Smaller badge size for mobile */
+            .trustshield-header-shield > div {
+              height: 36px !important;
+              min-width: 72px !important;
+              padding: 8px 16px !important;
+              border-radius: 18px !important;
+              font-size: 16px !important;
+            }
+            .trustshield-header-shield svg {
+              width: 18px !important;
+              height: 18px !important;
+            }
+          }
+          
+          /* Badge-specific optimizations */
+          .trustshield-header-shield {
+            display: flex !important;
+            align-items: center !important;
+            flex-shrink: 0 !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      // Mark header as modified
+      headerTitle.classList.add('trustshield-header-modified');
+      
+      console.log('[TrustShield v1.0.0] ✅ Successfully injected Trust Shield into listing header');
+      
+    } catch (error) {
+      console.error('[TrustShield v1.0.0] Error injecting into header:', error);
+      throw error; // Re-throw to trigger fallback
     }
   }
 
@@ -321,12 +990,12 @@ import './index.js';
   function injectContainer(container, listingData, pageType, componentVariant) {
     try {
       if (!container) {
-        console.error('[TrustShield v1.4.5] Container is null/undefined, cannot inject');
+        console.error('[TrustShield v1.0.0] Container is null/undefined, cannot inject');
         return;
       }
       
       if (!listingData || !listingData.element) {
-        console.error('[TrustShield v1.4.5] Invalid listing data or element, cannot inject container');
+        console.error('[TrustShield v1.0.0] Invalid listing data or element, cannot inject container');
         return;
       }
       
@@ -354,23 +1023,36 @@ import './index.js';
           listingData.imageContainer.appendChild(wrapper);
           return;
         }
+      } else if (pageType === 'listing' && componentVariant === 'badge') {
+        // For listing pages, inject badge into image gallery (safer DOM placement)
+        const mainImage = document.querySelector('.main-image');
+        console.log('[TrustShield v1.0.0] Looking for .main-image:', mainImage);
+        if (mainImage) {
+          console.log('[TrustShield v1.0.0] Found main image gallery, injecting badge in top-right corner');
+          injectIntoImageGallery(mainImage, container);
+          return;
+        } else {
+          console.warn('[TrustShield v1.0.0] Could not find .main-image for gallery injection, using fallback');
+          console.log('[TrustShield v1.0.0] Available title selectors:', 
+            document.querySelectorAll('h1, .title, [class*="title"], [class*="header"]'));
+        }
       }
 
       // Fallback: append to main element
       if (listingData.element && listingData.element.appendChild) {
         listingData.element.appendChild(container);
         } else {
-        console.error('[TrustShield v1.4.5] Cannot append container - element has no appendChild method');
+        console.error('[TrustShield v1.0.0] Cannot append container - element has no appendChild method');
       }
     } catch (error) {
-      console.error('[TrustShield v1.4.5] Error injecting container:', error);
+      console.error('[TrustShield v1.0.0] Error injecting container:', error);
       // Try fallback injection
       try {
         if (listingData && listingData.element && listingData.element.appendChild && container) {
           listingData.element.appendChild(container);
         }
       } catch (fallbackError) {
-        console.error('[TrustShield v1.4.5] Fallback injection also failed:', fallbackError);
+        console.error('[TrustShield v1.0.0] Fallback injection also failed:', fallbackError);
       }
     }
   }
@@ -420,6 +1102,13 @@ import './index.js';
 
   // Creates a Shadow DOM–scoped modal with the full score breakdown - matching v0 design exactly
   function openTrustShieldDialog(scoreData) {
+    console.log(`[TrustShield v1.0.0] 🔍 DIALOG DEBUG - Received scoreData:`, scoreData);
+    console.log(`[TrustShield v1.0.0] 🔍 BREAKDOWN DEBUG:`, scoreData?.breakdown?.map(item => ({
+      type: item.type,
+      points: item.points,
+      details: item.details
+    })));
+    
     // Tear down any existing dialog
     const existingHost = document.getElementById('idealista-trust-shield-dialog-host');
     if (existingHost && existingHost.parentNode) {
@@ -446,7 +1135,6 @@ import './index.js';
     overlay.style.position = 'fixed';
     overlay.style.inset = '0';
     overlay.style.background = 'rgba(0, 0, 0, 0.3)';
-    overlay.style.backdropFilter = 'blur(4px)';
     overlay.style.zIndex = '2147483647';
     
     if (isMobile) {
@@ -681,18 +1369,7 @@ import './index.js';
       return icon;
     }
 
-    // Helper to create chevron icon matching v0 design
-    function createChevronIcon() {
-      const chevron = document.createElement('div');
-      chevron.style.transition = 'transform 200ms ease';
-      chevron.style.color = '#9ca3af';
-      chevron.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      `;
-      return chevron;
-    }
+
 
     // Phase 1 Analysis Items - only include implemented scoring factors
     const analysisItems = [
@@ -722,8 +1399,6 @@ import './index.js';
       }
     ];
 
-    let expandedItem = null; // Track which accordion item is expanded
-
     analysisItems.forEach(function(item, index) {
       // Determine status from breakdown data - only show warnings/fails for actual negative impacts
       let status = 'pass';
@@ -736,26 +1411,16 @@ import './index.js';
         // Otherwise keep 'pass' - even if points are slightly negative but not significant
       }
 
-      const accordionItem = document.createElement('div');
-      accordionItem.style.background = 'transparent';
-      accordionItem.style.borderBottom = '1px solid rgba(0, 0, 0, 0.08)';
-      accordionItem.style.overflow = 'hidden';
-      accordionItem.style.transition = 'all 300ms ease';
+      // Create simple row item (no accordion)
+      const itemRow = document.createElement('div');
+      itemRow.style.background = 'transparent';
+      itemRow.style.borderBottom = '1px solid rgba(0, 0, 0, 0.08)';
+      itemRow.style.padding = '16px 0';
 
-      // Header (always visible) - minimal horizontal row style
-      const itemHeader = document.createElement('div');
-      itemHeader.style.display = 'flex';
-      itemHeader.style.alignItems = 'center';
-      itemHeader.style.justifyContent = 'space-between';
-      itemHeader.style.padding = '16px 0';
-      itemHeader.style.cursor = 'pointer';
-      itemHeader.style.transition = 'background 150ms ease';
-      itemHeader.style.userSelect = 'none';
-
-      const leftSection = document.createElement('div');
-      leftSection.style.display = 'flex';
-      leftSection.style.alignItems = 'center';
-      leftSection.style.gap = '12px';
+      const itemContent = document.createElement('div');
+      itemContent.style.display = 'flex';
+      itemContent.style.alignItems = 'center';
+      itemContent.style.gap = '12px';
 
       const statusIcon = createStatusIcon(status);
       
@@ -780,146 +1445,14 @@ import './index.js';
 
       textSection.appendChild(itemTitle);
       textSection.appendChild(itemSummary);
-      leftSection.appendChild(statusIcon);
-      leftSection.appendChild(textSection);
+      itemContent.appendChild(statusIcon);
+      itemContent.appendChild(textSection);
 
-      const chevron = createChevronIcon();
-      chevron.style.transform = 'rotate(0deg)';
-
-      itemHeader.appendChild(leftSection);
-      itemHeader.appendChild(chevron);
-
-      // Expanded content (hidden by default)
-      const expandedContent = document.createElement('div');
-      expandedContent.style.maxHeight = '0';
-      expandedContent.style.overflow = 'hidden';
-      expandedContent.style.transition = 'max-height 300ms ease-in-out';
-
-      const expandedInner = document.createElement('div');
-      expandedInner.style.padding = '16px 0';
-      expandedInner.style.paddingLeft = '32px'; // Align with text content (20px icon + 12px gap)
-      expandedInner.style.fontSize = '13px';
-      expandedInner.style.color = '#4a4a4a';
-      expandedInner.style.lineHeight = '1.5';
-
-      // Create expanded content based on breakdown type (pass full scoreData for accurate info)
-      const explanationText = getExplanationText(item.breakdown?.type, item.breakdown, scoreData);
-      expandedInner.textContent = explanationText;
-
-      expandedContent.appendChild(expandedInner);
-
-      // Click handler for accordion
-      const toggleAccordion = function() {
-        const isCurrentlyExpanded = expandedItem === index;
-        
-        // Close any currently expanded item
-        if (expandedItem !== null && expandedItem !== index) {
-          const otherAccordion = analysisContainer.children[expandedItem];
-          const otherContent = otherAccordion.querySelector('.expanded-content');
-          const otherChevron = otherAccordion.querySelector('.chevron');
-          otherContent.style.maxHeight = '0';
-          otherChevron.style.transform = 'rotate(0deg)';
-        }
-
-        if (isCurrentlyExpanded) {
-          // Close this item
-          expandedContent.style.maxHeight = '0';
-          chevron.style.transform = 'rotate(0deg)';
-          expandedItem = null;
-        } else {
-          // Open this item
-          expandedContent.style.maxHeight = expandedContent.scrollHeight + 'px';
-          chevron.style.transform = 'rotate(-180deg)'; // Rotate up when expanded
-          expandedItem = index;
-        }
-      };
-
-      // Add classes for querySelector access
-      expandedContent.className = 'expanded-content';
-      chevron.className = 'chevron';
-
-      itemHeader.addEventListener('click', toggleAccordion);
-
-      // Hover effects (subtle background overlay)
-      itemHeader.onmouseenter = function() {
-        itemHeader.style.background = 'rgba(0, 0, 0, 0.03)';
-      };
-      itemHeader.onmouseleave = function() {
-        itemHeader.style.background = 'transparent';
-      };
-
-      // Keyboard navigation
-      itemHeader.setAttribute('tabindex', '0');
-      itemHeader.setAttribute('role', 'button');
-      itemHeader.setAttribute('aria-expanded', 'false');
-      itemHeader.onkeydown = function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          toggleAccordion();
-          itemHeader.setAttribute('aria-expanded', expandedItem === index ? 'true' : 'false');
-        }
-      };
-
-      accordionItem.appendChild(itemHeader);
-      accordionItem.appendChild(expandedContent);
-      analysisContainer.appendChild(accordionItem);
+      itemRow.appendChild(itemContent);
+      analysisContainer.appendChild(itemRow);
     });
 
-    // Helper function to generate explanation text based on analysis type
-    function getExplanationText(type, breakdown, scoreData) {
-      const points = breakdown?.points || 0;
-      const listingData = scoreData?.listingData || {};
-      
-      switch (type) {
-        case 'scam_keywords':
-          return points < 0 
-            ? `We detected suspicious phrases commonly used in scam listings. These keywords suggest potential fraud: "${breakdown?.details}". Be very cautious with this listing.`
-            : 'No suspicious language patterns detected. The listing description uses professional and trustworthy language.';
-        
-        case 'price_anomaly':
-          const pricePerSqm = listingData.price && listingData.size ? (listingData.price / listingData.size).toFixed(0) : null;
-          const neighborhood = listingData.neighborhood || 'this area';
-          return points < 0
-            ? `The price per square meter${pricePerSqm ? ` (€${pricePerSqm}/m²)` : ''} appears to be significantly below market average for ${neighborhood}, which could indicate a scam or hidden costs.`
-            : `The price${pricePerSqm ? ` of €${pricePerSqm}/m²` : ''} appears to be within normal market range for ${neighborhood} and this property type.`;
-        
-        case 'photo_count':
-          const photoCount = listingData.photoCount || 0;
-          return photoCount < 5
-            ? `Only ${photoCount} photos provided. Quality listings typically include 15+ photos showing different rooms and angles.`
-            : `${photoCount} photos provided, showing ${photoCount >= 15 ? 'excellent' : photoCount >= 10 ? 'good' : 'adequate'} visual coverage of the property.`;
-        
-        case 'freshness':
-          const lastUpdated = listingData.lastUpdated;
-          let daysSinceUpdate = null;
-          if (lastUpdated) {
-            try {
-              const updateDate = new Date(lastUpdated);
-              const now = new Date();
-              daysSinceUpdate = Math.floor((now - updateDate) / (1000 * 60 * 60 * 24));
-            } catch (e) {
-              // Ignore date parsing errors
-            }
-          }
-          
-          return points < 0
-            ? `This listing hasn't been updated recently${daysSinceUpdate ? ` (${daysSinceUpdate} days ago)` : ''}, which may indicate it's no longer available or the advertiser isn't actively managing it.`
-            : `The listing was recently updated${daysSinceUpdate !== null ? ` (${daysSinceUpdate} days ago)` : ''}, suggesting the advertiser is actively managing it.`;
-        
-        case 'duplicate':
-          return points < 0
-            ? 'We found similar listings with identical photos or descriptions, which could indicate a scam or over-advertising.'
-            : 'This appears to be a unique listing without suspicious duplicates elsewhere.';
-        
-        case 'generic_email':
-          return points < 0
-            ? 'The contact email uses a generic domain (Gmail, Hotmail, etc.) rather than a professional domain, which is less common for legitimate agencies.'
-            : 'The advertiser uses professional contact information.';
-        
-        default:
-          return breakdown?.details || 'Analysis completed successfully.';
-      }
-    }
+
 
     // Add CSS animations to shadow DOM
     const style = document.createElement('style');
@@ -979,17 +1512,17 @@ import './index.js';
   function processListingWithLoadingState(listingData, componentVariant = 'badge', fadeInDelay = 0) {
     // Validate input parameters
     if (!listingData) {
-      console.error('[TrustShield v1.4.5] processListingWithLoadingState called with null/undefined listingData');
+      console.error('[TrustShield v1.0.0] processListingWithLoadingState called with null/undefined listingData');
       return;
     }
     
     if (!listingData.id || typeof listingData.id !== 'string') {
-      console.error('[TrustShield v1.4.5] processListingWithLoadingState called with invalid listing ID:', listingData.id, typeof listingData.id);
+      console.error('[TrustShield v1.0.0] processListingWithLoadingState called with invalid listing ID:', listingData.id, typeof listingData.id);
       return;
     }
     
     if (!listingData.element) {
-      console.error('[TrustShield v1.4.5] processListingWithLoadingState called with missing element:', listingData);
+      console.error('[TrustShield v1.0.0] processListingWithLoadingState called with missing element:', listingData);
       return;
     }
     
@@ -998,10 +1531,10 @@ import './index.js';
     // Check if we already have a Trust Shield for this listing
     const existingContainer = document.getElementById(`idealista-trust-shield-${listingData.id}-${componentVariant}`);
     if (existingContainer && existingContainer.parentNode) {
-      console.log(`[TrustShield v1.4.5] ⚠️ Trust Shield already exists for ${listingData.id}, skipping duplicate`);
+      console.log(`[TrustShield v1.0.0] ⚠️ Trust Shield already exists for ${listingData.id}, skipping duplicate`);
       return;
     } else if (existingContainer && !existingContainer.parentNode) {
-      console.log(`[TrustShield v1.4.5] 🔧 Found orphaned container for ${listingData.id}, cleaning up and recreating`);
+      console.log(`[TrustShield v1.0.0] 🔧 Found orphaned container for ${listingData.id}, cleaning up and recreating`);
       existingContainer.remove();
     }
     
@@ -1010,7 +1543,7 @@ import './index.js';
       const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
       
       if (!container) {
-        console.error('[TrustShield v1.4.5] Failed to create container for listing:', listingData.id);
+        console.error('[TrustShield v1.0.0] Failed to create container for listing:', listingData.id);
         return;
       }
       
@@ -1034,7 +1567,7 @@ import './index.js';
       calculateScoreWithTransition(container, listingData, componentVariant);
       
     } catch (error) {
-      console.error('[TrustShield v1.4.5] Error in processListingWithLoadingState:', error);
+      console.error('[TrustShield v1.0.0] Error in processListingWithLoadingState:', error);
       // Fallback to regular processing
       processListing(listingData, componentVariant);
     }
@@ -1057,7 +1590,7 @@ import './index.js';
       }
     }, function(response) {
       if (response && response.success) {
-        console.log('[TrustShield v1.4.5] 📨 Score calculated, transitioning from loading state:', {
+        console.log('[TrustShield v1.0.0] 📨 Score calculated, transitioning from loading state:', {
           score: response.data?.score,
           listingId: listingData.id
         });
@@ -1065,7 +1598,7 @@ import './index.js';
         // Smooth transition from loading to final score
         renderComponent(container, listingData, response, false, componentVariant);
       } else {
-        console.error('[TrustShield v1.4.5] Score calculation failed for listing:', listingData.id, response?.error);
+        console.error('[TrustShield v1.0.0] Score calculation failed for listing:', listingData.id, response?.error);
         // Keep the loading state or show error state
       }
     });
@@ -1075,17 +1608,17 @@ import './index.js';
   function processListing(listingData, componentVariant = 'collapsed') {
     // Validate input parameters
     if (!listingData) {
-      console.error('[TrustShield v1.4.5] processListing called with null/undefined listingData');
+      console.error('[TrustShield v1.0.0] processListing called with null/undefined listingData');
       return;
     }
     
     if (!listingData.id || typeof listingData.id !== 'string') {
-      console.error('[TrustShield v1.4.5] processListing called with invalid listing ID:', listingData.id, typeof listingData.id);
+      console.error('[TrustShield v1.0.0] processListing called with invalid listing ID:', listingData.id, typeof listingData.id);
       return;
     }
     
     if (!listingData.element) {
-      console.error('[TrustShield v1.4.5] processListing called with missing element:', listingData);
+      console.error('[TrustShield v1.0.0] processListing called with missing element:', listingData);
       return;
     }
     
@@ -1106,7 +1639,7 @@ import './index.js';
       const container = createRootContainer(listingData.element, listingData.id + '-' + componentVariant);
       
       if (!container) {
-        console.error('[TrustShield v1.4.5] Failed to create container for listing:', listingData.id);
+        console.error('[TrustShield v1.0.0] Failed to create container for listing:', listingData.id);
         return;
       }
       
@@ -1131,7 +1664,7 @@ import './index.js';
     const listingElements = document.querySelectorAll('article.item[data-element-id]');
     const currentListings = new Map();
     
-    console.log(`[TrustShield v1.4.5] 🔍 Processing ${listingElements.length} listings on search page`);
+    console.log(`[TrustShield v1.0.0] 🔍 Processing ${listingElements.length} listings on search page`);
     
     // Build current listings map
     for (let i = 0; i < listingElements.length; i++) {
@@ -1147,7 +1680,7 @@ import './index.js';
     
     // Handle removed listings
     if (changes.removed.length > 0) {
-      console.log(`[TrustShield v1.4.5] 🗑️ Removing Trust Shields for ${changes.removed.length} listings:`, changes.removed);
+      console.log(`[TrustShield v1.0.0] 🗑️ Removing Trust Shields for ${changes.removed.length} listings:`, changes.removed);
       changes.removed.forEach(listingId => {
         cleanupListingTrustShield(listingId);
       });
@@ -1155,7 +1688,7 @@ import './index.js';
     
     // Handle new listings with immediate loading state + smooth transitions
     if (changes.added.length > 0) {
-      console.log(`[TrustShield v1.4.5] ➕ Adding Trust Shields for ${changes.added.length} new listings with loading states:`, changes.added);
+      console.log(`[TrustShield v1.0.0] ➕ Adding Trust Shields for ${changes.added.length} new listings with loading states:`, changes.added);
       changes.added.forEach((listingId, index) => {
         const element = currentListings.get(listingId);
         if (element) {
@@ -1176,13 +1709,13 @@ import './index.js';
     // Special case: If we have very few persistent listings and many new ones, 
     // it might be a complete page refresh (like after filters)
     if (changes.persistent.length < 3 && changes.added.length > 5) {
-      console.log(`[TrustShield v1.4.5] 🔄 Detected potential page refresh (${changes.persistent.length} persistent, ${changes.added.length} new) - forcing full reprocess`);
+      console.log(`[TrustShield v1.0.0] 🔄 Detected potential page refresh (${changes.persistent.length} persistent, ${changes.added.length} new) - forcing full reprocess`);
       // Force process all listings to ensure Trust Shields appear
       currentListings.forEach((element, listingId) => {
         // Check if this listing already has a Trust Shield
         const existingContainer = document.getElementById(ROOT_CONTAINER_ID + '-' + listingId + '-badge');
         if (!existingContainer) {
-          console.log(`[TrustShield v1.4.5] 🔧 Force processing listing ${listingId}`);
+          console.log(`[TrustShield v1.0.0] 🔧 Force processing listing ${listingId}`);
           processNewListing(element, listingId);
         }
       });
@@ -1190,13 +1723,13 @@ import './index.js';
     
     // Handle persistent listings (no change needed but update tracking)
     if (changes.persistent.length > 0) {
-      console.log(`[TrustShield v1.4.5] ✅ ${changes.persistent.length} listings remain unchanged`);
+      console.log(`[TrustShield v1.0.0] ✅ ${changes.persistent.length} listings remain unchanged`);
     }
     
     // Update our known state
     lastKnownListings = new Map(currentListings);
     
-    console.log(`[TrustShield v1.4.5] 📊 Search page state: ${changes.persistent.length} persistent, ${changes.added.length} added, ${changes.removed.length} removed`);
+    console.log(`[TrustShield v1.0.0] 📊 Search page state: ${changes.persistent.length} persistent, ${changes.added.length} added, ${changes.removed.length} removed`);
   }
   
   // Morphdom-inspired change detection
@@ -1243,9 +1776,9 @@ import './index.js';
       processedListings.delete(badgeKey);
       processedListings.delete(collapsedKey);
       
-      console.log(`[TrustShield v1.4.5] 🧹 Cleaned up Trust Shield for listing ${listingId}`);
+      console.log(`[TrustShield v1.0.0] 🧹 Cleaned up Trust Shield for listing ${listingId}`);
     } catch (error) {
-      console.warn(`[TrustShield v1.4.5] Error cleaning up listing ${listingId}:`, error);
+      console.warn(`[TrustShield v1.0.0] Error cleaning up listing ${listingId}:`, error);
     }
   }
   
@@ -1275,7 +1808,7 @@ import './index.js';
         });
       }
     } catch (error) {
-      console.warn(`[TrustShield v1.4.5] Error processing new listing ${listingId}:`, error);
+      console.warn(`[TrustShield v1.0.0] Error processing new listing ${listingId}:`, error);
     }
   }
 
@@ -1284,8 +1817,8 @@ import './index.js';
     const listingData = extractCurrentListingData();
     
     if (listingData) {
-      // Use collapsed variant for listing pages per v0 spec
-      processListing(listingData, 'collapsed');
+      // Use badge variant for listing pages to match search page design
+      processListing(listingData, 'badge');
     }
   }
 
@@ -1299,7 +1832,7 @@ import './index.js';
     searchResultsContainer = document.querySelector('.items-container.items-list, section.items-container, main.listing-items');
     
     if (pageType === 'search' && searchResultsContainer) {
-      console.log(`[TrustShield v1.4.5] 👀 Monitoring search results container for changes`);
+      console.log(`[TrustShield v1.0.0] 👀 Monitoring search results container for changes`);
       
       // Enhanced MutationObserver with targeted observation
     mutationObserver = new MutationObserver(function(mutations) {
@@ -1339,7 +1872,7 @@ import './index.js';
                 node.classList.contains('listing-items') ||
                 node.id === 'searchResults'
               )) {
-                console.log(`[TrustShield v1.4.5] 🔄 Search container updated via mutation, forcing reprocess`);
+                console.log(`[TrustShield v1.0.0] 🔄 Search container updated via mutation, forcing reprocess`);
                 shouldReprocess = true;
                 significantChanges = true;
                 
@@ -1381,7 +1914,7 @@ import './index.js';
       
       if (shouldReprocess && pageType === 'search') {
           if (significantChanges) {
-            console.log(`[TrustShield v1.4.5] 🔄 Significant DOM changes detected, reprocessing search results`);
+            console.log(`[TrustShield v1.0.0] 🔄 Significant DOM changes detected, reprocessing search results`);
           }
           
           // Enhanced debouncing with requestIdleCallback for better performance
@@ -1452,7 +1985,7 @@ import './index.js';
     urlChangeObserver = new MutationObserver(() => {
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.4.5] 🔗 URL changed from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] 🔗 URL changed from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -1468,7 +2001,7 @@ import './index.js';
     window.addEventListener('popstate', function(event) {
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.4.5] 🔙 Browser navigation from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] 🔙 Browser navigation from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -1482,7 +2015,7 @@ import './index.js';
       originalPushState.apply(history, args);
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.4.5] ⏭️ pushState navigation from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] ⏭️ pushState navigation from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -1492,7 +2025,7 @@ import './index.js';
       originalReplaceState.apply(history, args);
       const newUrl = window.location.href;
       if (newUrl !== currentUrl) {
-        console.log(`[TrustShield v1.4.5] 🔄 replaceState navigation from ${currentUrl} to ${newUrl}`);
+        console.log(`[TrustShield v1.0.0] 🔄 replaceState navigation from ${currentUrl} to ${newUrl}`);
         handleUrlChange(currentUrl, newUrl);
         currentUrl = newUrl;
       }
@@ -1507,7 +2040,7 @@ import './index.js';
       
       // If we're staying on the same page type but URL changed, it's likely a filter change
       if (oldPageType === 'search' && newPageType === 'search') {
-        console.log(`[TrustShield v1.4.5] 🔍 Filter/search change detected, refreshing listings`);
+        console.log(`[TrustShield v1.0.0] 🔍 Filter/search change detected, refreshing listings`);
         
         // Clear processed listings for this URL context immediately
         clearProcessedListingsForUrl(oldUrl);
@@ -1518,20 +2051,20 @@ import './index.js';
         // Give the page a moment to update the DOM, then force reprocessing
         const scheduleRefresh = window.requestIdleCallback || ((fn) => setTimeout(fn, 300));
         scheduleRefresh(() => {
-          console.log(`[TrustShield v1.4.5] 🔄 Processing search page after filter change`);
+          console.log(`[TrustShield v1.0.0] 🔄 Processing search page after filter change`);
           
           // First check if our dynamic monitoring already handled it
           const currentListingCount = document.querySelectorAll('article.item[data-element-id]').length;
           const processedCount = processedListings.size;
           
-          console.log(`[TrustShield v1.4.5] 📊 Current listings: ${currentListingCount}, Processed: ${processedCount}`);
+          console.log(`[TrustShield v1.0.0] 📊 Current listings: ${currentListingCount}, Processed: ${processedCount}`);
           
           // Only do full reprocessing if the dynamic monitoring missed some
           if (processedCount < currentListingCount * 0.8) { // If less than 80% processed
-            console.log(`[TrustShield v1.4.5] 🔄 Dynamic monitoring missed some listings, doing full reprocess`);
+            console.log(`[TrustShield v1.0.0] 🔄 Dynamic monitoring missed some listings, doing full reprocess`);
             processSearchPageListings();
           } else {
-            console.log(`[TrustShield v1.4.5] ✅ Dynamic monitoring handled most listings, skipping duplicate processing`);
+            console.log(`[TrustShield v1.0.0] ✅ Dynamic monitoring handled most listings, skipping duplicate processing`);
           }
           
           // Final verification check (only if needed)
@@ -1552,7 +2085,7 @@ import './index.js';
                 } else {
                   // Verify the shield is actually attached and visible
                   if (!shieldContainer.parentNode || !document.body.contains(shieldContainer)) {
-                    console.log(`[TrustShield v1.4.5] 🔧 Found detached shield for ${listingId}, treating as missing`);
+                    console.log(`[TrustShield v1.0.0] 🔧 Found detached shield for ${listingId}, treating as missing`);
                     missingShields.push(element);
                   }
                 }
@@ -1560,13 +2093,13 @@ import './index.js';
             }
             
             if (missingShields.length > 0) {
-              console.log(`[TrustShield v1.4.5] 🔍 Final verification: ${missingShields.length} missing shields, adding them`);
+              console.log(`[TrustShield v1.0.0] 🔍 Final verification: ${missingShields.length} missing shields, adding them`);
               
               missingShields.forEach((element, index) => {
                 const listingData = extractListingData(element);
                 if (listingData) {
                   const listingKey = listingData.id + ':' + listingData.url + ':badge';
-                  console.log(`[TrustShield v1.4.5] 🔧 Processing missing shield for listing ${listingData.id}, processed key: ${listingKey}`);
+                  console.log(`[TrustShield v1.0.0] 🔧 Processing missing shield for listing ${listingData.id}, processed key: ${listingKey}`);
                   
                   if (!processedListings.has(listingKey)) {
                     processedListings.add(listingKey);
@@ -1574,29 +2107,29 @@ import './index.js';
                     try {
                       // Use fallback to regular processListing if loading state fails
                       processListingWithLoadingState(listingData, 'badge', 0);
-                      console.log(`[TrustShield v1.4.5] ✅ Successfully initiated shield for ${listingData.id}`);
+                      console.log(`[TrustShield v1.0.0] ✅ Successfully initiated shield for ${listingData.id}`);
                     } catch (error) {
-                      console.error(`[TrustShield v1.4.5] ❌ Loading state failed for ${listingData.id}, trying regular processing:`, error);
+                      console.error(`[TrustShield v1.0.0] ❌ Loading state failed for ${listingData.id}, trying regular processing:`, error);
                       try {
                         processListing(listingData, 'badge');
-                        console.log(`[TrustShield v1.4.5] ✅ Fallback processing succeeded for ${listingData.id}`);
+                        console.log(`[TrustShield v1.0.0] ✅ Fallback processing succeeded for ${listingData.id}`);
                       } catch (fallbackError) {
-                        console.error(`[TrustShield v1.4.5] ❌ Both methods failed for ${listingData.id}:`, fallbackError);
+                        console.error(`[TrustShield v1.0.0] ❌ Both methods failed for ${listingData.id}:`, fallbackError);
                       }
                     }
                   } else {
-                    console.log(`[TrustShield v1.4.5] ⚠️ Listing ${listingData.id} already in processed set but DOM shield missing`);
+                    console.log(`[TrustShield v1.0.0] ⚠️ Listing ${listingData.id} already in processed set but DOM shield missing`);
                     
                     // Force reprocessing if processed but DOM element missing
                     try {
                       processListingWithLoadingState(listingData, 'badge', 0);
-                      console.log(`[TrustShield v1.4.5] ✅ Force reprocessed ${listingData.id}`);
+                      console.log(`[TrustShield v1.0.0] ✅ Force reprocessed ${listingData.id}`);
                     } catch (error) {
-                      console.error(`[TrustShield v1.4.5] ❌ Force reprocessing failed for ${listingData.id}:`, error);
+                      console.error(`[TrustShield v1.0.0] ❌ Force reprocessing failed for ${listingData.id}:`, error);
                     }
                   }
                 } else {
-                  console.error(`[TrustShield v1.4.5] ❌ Failed to extract listing data for element:`, element);
+                  console.error(`[TrustShield v1.0.0] ❌ Failed to extract listing data for element:`, element);
                 }
               });
               
@@ -1611,36 +2144,36 @@ import './index.js';
                 
                 if (stillMissing.length > 0) {
                   const stillMissingIds = stillMissing.map(el => el.getAttribute('data-element-id'));
-                  console.warn(`[TrustShield v1.4.5] ⚠️ ${stillMissing.length} shields still missing after processing:`, stillMissingIds);
+                  console.warn(`[TrustShield v1.0.0] ⚠️ ${stillMissing.length} shields still missing after processing:`, stillMissingIds);
                   
                   // Last resort: try one more time with regular processing
                   stillMissing.forEach(element => {
                     const listingData = extractListingData(element);
                     if (listingData) {
-                      console.log(`[TrustShield v1.4.5] 🆘 Last resort processing for ${listingData.id}`);
+                      console.log(`[TrustShield v1.0.0] 🆘 Last resort processing for ${listingData.id}`);
                       try {
                         processListing(listingData, 'badge');
                       } catch (error) {
-                        console.error(`[TrustShield v1.4.5] ❌ Last resort failed for ${listingData.id}:`, error);
+                        console.error(`[TrustShield v1.0.0] ❌ Last resort failed for ${listingData.id}:`, error);
                       }
                     }
                   });
                 } else {
-                  console.log(`[TrustShield v1.4.5] ✅ All missing shields successfully added`);
+                  console.log(`[TrustShield v1.0.0] ✅ All missing shields successfully added`);
                 }
               }, 800);
             } else {
-              console.log(`[TrustShield v1.4.5] ✅ All listings have Trust Shields`);
+              console.log(`[TrustShield v1.0.0] ✅ All listings have Trust Shields`);
             }
           }, 1000); // Reduced from 1500ms to 1000ms
         });
       } else if (oldPageType !== newPageType) {
         // Page type changed, reinitialize completely
-        console.log(`[TrustShield v1.4.5] 📄 Page type changed from ${oldPageType} to ${newPageType}, reinitializing`);
+        console.log(`[TrustShield v1.0.0] 📄 Page type changed from ${oldPageType} to ${newPageType}, reinitializing`);
         handleNavigation();
       }
     } catch (error) {
-      console.warn(`[TrustShield v1.4.5] Error handling URL change:`, error);
+      console.warn(`[TrustShield v1.0.0] Error handling URL change:`, error);
     }
   }
   
@@ -1653,13 +2186,13 @@ import './index.js';
       }
     }
     keysToRemove.forEach(key => processedListings.delete(key));
-    console.log(`[TrustShield v1.4.5] 🧹 Cleared ${keysToRemove.length} processed listings for URL change`);
+    console.log(`[TrustShield v1.0.0] 🧹 Cleared ${keysToRemove.length} processed listings for URL change`);
   }
 
   // Initialize the extension
   function initialize() {
     try {
-      console.log('Idealista Trust Shield content v1.4.5: initialize start - CSP-compliant data handling');
+      console.log('Idealista Trust Shield content v1.0.0: initialize start - CSP-compliant data handling');
       // Detect page type
       pageType = detectPageType();
       
@@ -1668,10 +2201,15 @@ import './index.js';
         return;
       }
       
-              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.3.5)');
+              console.log('Idealista Trust Shield: Initializing on', pageType, 'page (v1.0.0)');
       
       // Process existing content
       if (pageType === 'search' || pageType === 'favorites') {
+        // Only show trust shields on rental pages, not sale pages
+        if (pageType === 'search' && !isRentalPage()) {
+          console.log('Idealista Trust Shield: Sale page detected, skipping trust shield injection');
+          return;
+        }
         processSearchPageListings();
         observePageChanges();
         setupUrlMonitoring(); // Monitor for filter/search changes
@@ -1681,9 +2219,9 @@ import './index.js';
       
 
       
-      console.log('Idealista Trust Shield: Initialization complete (v1.3.5)');
+      console.log('Idealista Trust Shield: Initialization complete (v1.0.0)');
     } catch (error) {
-      console.error('Idealista Trust Shield: Initialization failed (v1.3.5):', error);
+      console.error('Idealista Trust Shield: Initialization failed (v1.0.0):', error);
     }
   }
 
@@ -1692,7 +2230,7 @@ import './index.js';
     const newPageType = detectPageType();
     
     if (newPageType !== pageType) {
-      console.log(`[TrustShield v1.4.5] 🧭 Navigation: ${pageType} → ${newPageType}`);
+      console.log(`[TrustShield v1.0.0] 🧭 Navigation: ${pageType} → ${newPageType}`);
       
       // Comprehensive cleanup
       processedListings.clear();
